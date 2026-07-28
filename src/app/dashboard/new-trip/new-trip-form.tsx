@@ -1,0 +1,438 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useFormState } from "react-dom";
+import { useTransition } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { type DateRange } from "react-day-picker";
+import { usePillBanner } from "@/components/pill-banner-provider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CountryCombobox } from "@/components/country-combobox";
+import { CityCombobox } from "@/components/city-combobox";
+import { TRIP_TYPES, formatTripType } from "@/lib/trips";
+import { cn } from "@/lib/utils";
+import { createTrip, updateTrip, type CreateTripState } from "./actions";
+
+const initialState: CreateTripState = { error: null };
+
+export type NewTripFormDefaults = {
+  city: string;
+  countryCode: string;
+  start_date: string;
+  end_date: string;
+  trip_type: string;
+  travelers: number;
+};
+
+type NewTripFormProps = {
+  mode?: "create" | "edit";
+  tripId?: string;
+  defaultValues?: Partial<NewTripFormDefaults>;
+};
+
+/** Parse a stored `YYYY-MM-DD` string as a local (not UTC) calendar date. */
+function parseISODate(value: string): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/** Format a local Date back to `YYYY-MM-DD` without timezone drift. */
+function toISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** SSR-safe media query hook. Defaults to `false` until mounted on the client. */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [query]);
+
+  return matches;
+}
+
+function formatRangeLabel(range: DateRange | undefined): string {
+  if (!range?.from) return "Select dates";
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const fromLabel = range.from.toLocaleDateString(undefined, opts);
+  if (!range.to) return fromLabel;
+  const toLabel = range.to.toLocaleDateString(undefined, opts);
+  return `${fromLabel} – ${toLabel}`;
+}
+
+const newTripSchema = z
+  .object({
+    city: z
+      .string()
+      .trim()
+      .min(1, "City is required.")
+      .min(2, "City must be at least 2 characters.")
+      .refine((value) => !/\d/.test(value), {
+        message: "City cannot contain numbers.",
+      }),
+    countryCode: z.string(),
+    start_date: z.string().min(1, "Start date is required."),
+    end_date: z.string().min(1, "End date is required."),
+    trip_type: z.string().min(1, "Please select a trip type."),
+    travelers: z
+      .number({ error: "At least 1 traveler." })
+      .int()
+      .min(1, "At least 1 traveler."),
+  })
+  .refine((data) => data.end_date >= data.start_date, {
+    message: "End date must be on or after the start date.",
+    path: ["end_date"],
+  });
+
+type NewTripValues = z.infer<typeof newTripSchema>;
+
+export function NewTripForm({
+  mode = "create",
+  tripId,
+  defaultValues,
+}: NewTripFormProps) {
+  const isEdit = mode === "edit" && Boolean(tripId);
+  const [state, formAction] = useFormState(
+    isEdit ? updateTrip : createTrip,
+    initialState
+  );
+  const [isPending, startTransition] = useTransition();
+  const { showBanner } = usePillBanner();
+
+  useEffect(() => {
+    if (state.error) {
+      showBanner({ message: state.error, variant: "error" });
+    }
+  }, [state.error, showBanner]);
+
+  const form = useForm<NewTripValues>({
+    resolver: zodResolver(newTripSchema),
+    defaultValues: {
+      city: defaultValues?.city ?? "",
+      countryCode: defaultValues?.countryCode ?? "",
+      start_date: defaultValues?.start_date ?? "",
+      end_date: defaultValues?.end_date ?? "",
+      trip_type: defaultValues?.trip_type ?? "",
+      travelers: defaultValues?.travelers ?? 1,
+    },
+  });
+
+  const tripType = form.watch("trip_type");
+  const countryCode = form.watch("countryCode");
+  const startDate = form.watch("start_date");
+  const endDate = form.watch("end_date");
+  const [dateOpen, setDateOpen] = useState(false);
+
+  // Local, uncommitted selection edited inside the sheet. Only copied into the
+  // form values when the user confirms with "Done"; discarded on cancel/esc.
+  const [tempRange, setTempRange] = useState<DateRange | undefined>(undefined);
+
+  // 2 months on desktop, 1 on mobile so the calendar never overflows.
+  const isDesktop = useMediaQuery("(min-width: 640px)");
+  const numberOfMonths = isDesktop ? 2 : 1;
+
+  const today = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
+
+  const selectedRange: DateRange | undefined = startDate
+    ? { from: parseISODate(startDate), to: parseISODate(endDate) }
+    : undefined;
+
+  const tempRangeComplete = Boolean(tempRange?.from && tempRange?.to);
+
+  function handleDateOpenChange(open: boolean) {
+    if (open) {
+      // Seed the temp selection from the committed values so reopening shows
+      // the existing range.
+      setTempRange(selectedRange);
+    } else {
+      // Closing via outside-click or esc behaves like Cancel: drop the temp
+      // selection, leaving the committed form values untouched.
+      setTempRange(undefined);
+    }
+    setDateOpen(open);
+  }
+
+  function handleCancelDates() {
+    setTempRange(undefined);
+    setDateOpen(false);
+  }
+
+  function handleDoneDates() {
+    const from = tempRange?.from;
+    const to = tempRange?.to;
+    // Secondary guard: Done is disabled until both are picked.
+    if (!from || !to) return;
+    form.setValue("start_date", toISODate(from), {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    form.setValue("end_date", toISODate(to), {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setTempRange(undefined);
+    setDateOpen(false);
+  }
+
+  function onValid(values: NewTripValues) {
+    const formData = new FormData();
+    if (isEdit && tripId) {
+      formData.set("tripId", tripId);
+    }
+    formData.set("city", values.city.trim());
+    formData.set("countryCode", values.countryCode.trim().toUpperCase());
+    formData.set("start_date", values.start_date);
+    formData.set("end_date", values.end_date);
+    formData.set("trip_type", values.trip_type);
+    formData.set("travelers", String(values.travelers));
+    startTransition(() => {
+      formAction(formData);
+    });
+  }
+
+  return (
+    <Form {...form}>
+      <form
+        onSubmit={form.handleSubmit(onValid)}
+        className="flex flex-col gap-4"
+        data-testid={isEdit ? "edit-trip-form" : "new-trip-form"}
+      >
+        <FormField
+          control={form.control}
+          name="countryCode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country</FormLabel>
+              <FormControl>
+                <CountryCombobox
+                  value={field.value}
+                  onChange={(code) => {
+                    field.onChange(code);
+                    form.setValue("city", "");
+                  }}
+                />
+              </FormControl>
+              <FormDescription>
+                Optional, recommended — stored as an ISO country code.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="city"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>City</FormLabel>
+              <FormControl>
+                <CityCombobox
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  countryCode={countryCode}
+                />
+              </FormControl>
+              <FormMessage data-testid="city-error" />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="start_date"
+          render={() => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Trip dates</FormLabel>
+              <Sheet open={dateOpen} onOpenChange={handleDateOpenChange}>
+                <SheetTrigger asChild>
+                  <FormControl>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      data-testid="date-range-trigger"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !startDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formatRangeLabel(selectedRange)}
+                    </Button>
+                  </FormControl>
+                </SheetTrigger>
+                <SheetContent
+                  side="bottom"
+                  className="flex max-h-[90vh] flex-col gap-0 p-0"
+                >
+                  <SheetHeader className="border-b px-4 py-3 text-left">
+                    <SheetTitle>Select Trip Dates</SheetTitle>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto px-4 py-4">
+                    <div className="flex justify-center">
+                      <Calendar
+                        mode="range"
+                        selected={tempRange}
+                        onSelect={setTempRange}
+                        defaultMonth={tempRange?.from ?? today}
+                        numberOfMonths={numberOfMonths}
+                        disabled={isEdit ? undefined : { before: today }}
+                        autoFocus
+                      />
+                    </div>
+                    {!tempRangeComplete && (
+                      <p
+                        className="mt-2 text-center text-[0.8rem] text-muted-foreground"
+                        data-testid="date-range-hint"
+                      >
+                        Please select both start and end dates.
+                      </p>
+                    )}
+                  </div>
+                  <SheetFooter className="flex-row justify-end gap-2 border-t px-4 py-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancelDates}
+                      data-testid="date-range-cancel"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleDoneDates}
+                      disabled={!tempRangeComplete}
+                      data-testid="date-range-done"
+                    >
+                      Done
+                    </Button>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
+              <FormMessage />
+              {!form.formState.errors.start_date &&
+                form.formState.errors.end_date && (
+                  <p className="text-[0.8rem] font-medium text-destructive">
+                    {String(form.formState.errors.end_date.message ?? "")}
+                  </p>
+                )}
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="trip_type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Trip type</FormLabel>
+              <Select value={field.value || undefined} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger data-testid="trip-type-select">
+                    <SelectValue placeholder="Select a trip type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {TRIP_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {formatTripType(type)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="travelers"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Number of travelers</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  data-testid="travelers-input"
+                  value={field.value}
+                  onChange={(event) =>
+                    field.onChange(
+                      event.target.value === ""
+                        ? ""
+                        : Number.parseInt(event.target.value, 10)
+                    )
+                  }
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isPending || !tripType}
+          data-testid={isEdit ? "edit-trip-submit" : "create-trip-submit"}
+        >
+          {isPending
+            ? isEdit
+              ? "Saving…"
+              : "Creating…"
+            : isEdit
+              ? "Save changes"
+              : "Create trip"}
+        </Button>
+      </form>
+    </Form>
+  );
+}

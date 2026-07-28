@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/packing-reminders",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
