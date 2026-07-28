@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import {
@@ -24,7 +24,7 @@ import {
  *
  * Unlimited scans for Pro use profiles.is_pro (not a literal scans_month sentinel).
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
