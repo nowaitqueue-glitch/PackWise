@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
   try {
     // Idempotency for profile-mutating events: claim before any credits / Pro updates.
     if (isMutatingWebhookEvent(event.type)) {
-      const idempotencyKey = stripeWebhookIdempotencyKey(event);
+      const fromRequest = event.request?.idempotency_key?.trim();
+      const idempotencyKey = fromRequest || event.id;
       const claim = await claimWebhookEvent(admin, idempotencyKey);
       if (claim === "duplicate") {
         return NextResponse.json({ received: true });
@@ -114,13 +115,6 @@ const MUTATING_WEBHOOK_EVENTS = new Set([
 
 function isMutatingWebhookEvent(type: string): boolean {
   return MUTATING_WEBHOOK_EVENTS.has(type);
-}
-
-/** Prefer Stripe request idempotency key; fall back to event.id. */
-function stripeWebhookIdempotencyKey(event: Stripe.Event): string {
-  const fromRequest = event.request?.idempotency_key?.trim();
-  if (fromRequest) return fromRequest;
-  return event.id;
 }
 
 /**
