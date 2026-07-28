@@ -117,7 +117,7 @@ function isMutatingWebhookEvent(type: string): boolean {
 }
 
 /** Prefer Stripe request idempotency key; fall back to event.id. */
-export function stripeWebhookIdempotencyKey(event: Stripe.Event): string {
+function stripeWebhookIdempotencyKey(event: Stripe.Event): string {
   const fromRequest = event.request?.idempotency_key?.trim();
   if (fromRequest) return fromRequest;
   return event.id;
@@ -127,7 +127,7 @@ export function stripeWebhookIdempotencyKey(event: Stripe.Event): string {
  * Insert-before-process claim. Unique stripe_event_id makes concurrent retries
  * race-safe: the loser sees 23505 and must no-op (no double scan_pack credit).
  */
-export async function claimWebhookEvent(
+async function claimWebhookEvent(
   admin: SupabaseClient,
   stripeEventId: string
 ): Promise<"claimed" | "duplicate"> {
