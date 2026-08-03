@@ -12,7 +12,10 @@ import {
   Users,
 } from "lucide-react";
 import { GuestLockedDialog } from "@/components/guest-locked-dialog";
-import { GuestPackingList } from "@/components/guest-packing-list";
+import {
+  GuestPackingList,
+  type GuestPackedStats,
+} from "@/components/guest-packing-list";
 import { GuestSaveCta } from "@/components/guest-save-cta";
 import { GuestWeatherSection } from "@/components/guest-weather-section";
 import { TripCardSkeleton } from "@/components/trip-card-skeleton";
@@ -34,6 +37,7 @@ import {
   isGuestCtaDismissed,
   isGuestLockedDismissed,
   readGuestTrip,
+  syncGuestCheckoffCount,
   writeGuestTrip,
   type GuestTrip,
 } from "@/lib/guest-storage";
@@ -74,7 +78,9 @@ export default function GuestDashboardPage() {
   const [packingBusy, setPackingBusy] = useState(false);
   const [packingError, setPackingError] = useState<string | null>(null);
   const [sampleBusy, setSampleBusy] = useState(false);
-  const [showCta, setShowCta] = useState(false);
+  const [checkoffCount, setCheckoffCount] = useState(0);
+  const [packedCount, setPackedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [ctaDismissed, setCtaDismissed] = useState(true);
   const [lockedOpen, setLockedOpen] = useState(false);
   const [lockedFeature, setLockedFeature] = useState<string | null>(null);
@@ -97,9 +103,17 @@ export default function GuestDashboardPage() {
         tripType: guestTrip.tripType,
         travelers: guestTrip.travelers,
       });
-      setPackingItems(applyPackedState(items));
+      const withPacked = applyPackedState(items);
+      const count = syncGuestCheckoffCount(withPacked);
+      setPackingItems(withPacked);
+      setCheckoffCount(count);
+      setPackedCount(count);
+      setTotalCount(withPacked.length);
     } catch (error) {
       setPackingItems([]);
+      setCheckoffCount(syncGuestCheckoffCount([]));
+      setPackedCount(0);
+      setTotalCount(0);
       setPackingError(
         error instanceof Error
           ? error.message
@@ -126,16 +140,15 @@ export default function GuestDashboardPage() {
     }
   }
 
-  function handlePackedChange() {
-    if (!ctaDismissed) {
-      setShowCta(true);
-    }
+  function handlePackedChange(stats: GuestPackedStats) {
+    setCheckoffCount(stats.checkoffCount);
+    setPackedCount(stats.packedCount);
+    setTotalCount(stats.totalCount);
   }
 
   function handleDismissCta() {
     dismissGuestCta();
     setCtaDismissed(true);
-    setShowCta(false);
   }
 
   function handleLockedFeature(feature: string) {
@@ -332,7 +345,14 @@ export default function GuestDashboardPage() {
         />
       )}
 
-      <GuestSaveCta visible={showCta && !ctaDismissed} onDismiss={handleDismissCta} />
+      <GuestSaveCta
+        visible={!ctaDismissed}
+        onDismiss={handleDismissCta}
+        minCheckoffs={3}
+        checkoffCount={checkoffCount}
+        packedCount={packedCount}
+        totalCount={totalCount}
+      />
       <GuestLockedDialog
         open={lockedOpen}
         onOpenChange={setLockedOpen}

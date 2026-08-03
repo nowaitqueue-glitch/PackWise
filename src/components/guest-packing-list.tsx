@@ -3,13 +3,31 @@
 import { useEffect, useState } from "react";
 import { PackingListView } from "@/components/packing-list-view";
 import type { PackingItem } from "@/lib/packing";
-import { setGuestItemPacked } from "@/lib/guest-storage";
+import {
+  setGuestItemPacked,
+  syncGuestCheckoffCount,
+} from "@/lib/guest-storage";
 import { Badge } from "@/components/ui/badge";
+
+export type GuestPackedStats = {
+  checkoffCount: number;
+  packedCount: number;
+  totalCount: number;
+};
 
 type GuestPackingListProps = {
   initialItems: PackingItem[];
-  onPackedChange?: () => void;
+  onPackedChange?: (stats: GuestPackedStats) => void;
 };
+
+function statsFromItems(items: PackingItem[]): GuestPackedStats {
+  const packedCount = items.reduce((n, item) => n + (item.packed ? 1 : 0), 0);
+  return {
+    checkoffCount: packedCount,
+    packedCount,
+    totalCount: items.length,
+  };
+}
 
 export function GuestPackingList({
   initialItems,
@@ -27,7 +45,9 @@ export function GuestPackingList({
         i === index ? { ...row, packed } : row
       );
       setGuestItemPacked(item.name, packed);
-      onPackedChange?.();
+      const checkoffCount = syncGuestCheckoffCount(next);
+      const stats = statsFromItems(next);
+      onPackedChange?.({ ...stats, checkoffCount });
       return next;
     });
   }

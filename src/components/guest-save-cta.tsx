@@ -6,12 +6,47 @@ import { Button } from "@/components/ui/button";
 import { cn, glassCard, travelGradient } from "@/lib/utils";
 
 type GuestSaveCtaProps = {
+  /** Parent gate (e.g. not dismissed). Engagement threshold is applied here. */
   visible: boolean;
   onDismiss: () => void;
+  /** Minimum checked items before showing (default 3). */
+  minCheckoffs?: number;
+  checkoffCount: number;
+  packedCount: number;
+  totalCount: number;
 };
 
-export function GuestSaveCta({ visible, onDismiss }: GuestSaveCtaProps) {
-  if (!visible) return null;
+function shouldShowGuestSaveCta(input: {
+  minCheckoffs: number;
+  checkoffCount: number;
+  packedCount: number;
+  totalCount: number;
+}): boolean {
+  const { minCheckoffs, checkoffCount, packedCount, totalCount } = input;
+  if (checkoffCount >= minCheckoffs) return true;
+  if (totalCount > 0 && packedCount / totalCount >= 0.5) return true;
+  return false;
+}
+
+export function GuestSaveCta({
+  visible,
+  onDismiss,
+  minCheckoffs = 3,
+  checkoffCount,
+  packedCount,
+  totalCount,
+}: GuestSaveCtaProps) {
+  if (
+    !visible ||
+    !shouldShowGuestSaveCta({
+      minCheckoffs,
+      checkoffCount,
+      packedCount,
+      totalCount,
+    })
+  ) {
+    return null;
+  }
 
   return (
     <div

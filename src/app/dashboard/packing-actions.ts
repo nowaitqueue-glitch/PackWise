@@ -37,38 +37,117 @@ type UpdatePackingItemPackedResult =
   | { ok: true }
   | { ok: false; error: string };
 
+/** Known production hosts (hostname only; port ignored for these). */
+const KNOWN_APP_HOSTNAMES = new Set([
+  "packwise.app",
+  "www.packwise.app",
+]);
+
+function normalizeOrigin(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, "");
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+function parseHost(value: string): { hostname: string; host: string } | null {
+  const raw = value.split(",")[0]?.trim();
+  if (!raw) return null;
+  try {
+    const url = raw.includes("://") ? new URL(raw) : new URL(`http://${raw}`);
+    return {
+      hostname: url.hostname.toLowerCase(),
+      host: url.host.toLowerCase(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1"
+  );
+}
+
 /**
- * Prefer the incoming request host so background kickoff hits the same
- * deployment (e.g. Playwright on :3333), then fall back to env origins.
+ * Hosts allowed for x-forwarded-host: loopback variants, known production
+ * domains, and hosts derived from trusted env origins (APP_URL, VERCEL_URL, etc.).
+ */
+function isAllowedForwardedHost(hostHeader: string): boolean {
+  const parsed = parseHost(hostHeader);
+  if (!parsed) return false;
+
+  if (isLoopbackHostname(parsed.hostname)) {
+    return true;
+  }
+
+  if (KNOWN_APP_HOSTNAMES.has(parsed.hostname)) {
+    return true;
+  }
+
+  const envOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.TEST_BASE_URL,
+    process.env.VERCEL_URL,
+    process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
+  ];
+
+  for (const candidate of envOrigins) {
+    if (!candidate?.trim()) continue;
+    const envHost = parseHost(candidate);
+    if (!envHost) continue;
+    if (
+      parsed.host === envHost.host ||
+      parsed.hostname === envHost.hostname
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Origin for internal packing kickoff.
+ * Priority: NEXT_PUBLIC_APP_URL → allowlisted x-forwarded-host → localhost:3000 (dev).
  */
 async function resolveAppOrigin(): Promise<string> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (appUrl) {
+    return normalizeOrigin(appUrl);
+  }
+
   try {
     const headerStore = await headers();
-    const host =
-      headerStore.get("x-forwarded-host")?.split(",")[0]?.trim() ||
-      headerStore.get("host")?.trim();
-    if (host) {
+    const forwardedHost =
+      headerStore.get("x-forwarded-host")?.split(",")[0]?.trim();
+    if (forwardedHost && isAllowedForwardedHost(forwardedHost)) {
       const proto =
         headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
-        (host.includes("localhost") || host.startsWith("127.")
+        (isLoopbackHostname(parseHost(forwardedHost)?.hostname ?? "")
           ? "http"
           : "https");
-      return `${proto}://${host}`;
+      return `${proto}://${forwardedHost}`;
     }
   } catch {
     // headers() unavailable outside a request context
   }
 
-  const fromEnv =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.TEST_BASE_URL?.trim() ||
-    process.env.VERCEL_URL?.trim();
-  if (fromEnv) {
-    if (fromEnv.startsWith("http://") || fromEnv.startsWith("https://")) {
-      return fromEnv.replace(/\/$/, "");
-    }
-    return `https://${fromEnv.replace(/\/$/, "")}`;
+  if (process.env.NODE_ENV === "development") {
+    return "http://localhost:3000";
   }
+
+  const fromEnv =
+    process.env.TEST_BASE_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (fromEnv) {
+    return normalizeOrigin(fromEnv);
+  }
+
   return "http://localhost:3000";
 }
 

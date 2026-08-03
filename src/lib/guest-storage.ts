@@ -2,6 +2,7 @@ import type { PackingItem } from "@/lib/packing";
 
 export const GUEST_TRIP_KEY = "guest_trip";
 export const GUEST_PACKED_ITEMS_KEY = "guest_packed_items";
+export const GUEST_CHECKOFF_COUNT_KEY = "guest_checkoff_count";
 export const GUEST_CTA_DISMISSED_KEY = "guest_cta_dismissed";
 export const GUEST_LOCKED_DISMISSED_KEY = "guest_locked_dismissed";
 
@@ -123,6 +124,7 @@ export function clearGuestTrip(): void {
   try {
     localStorage.removeItem(GUEST_TRIP_KEY);
     localStorage.removeItem(GUEST_PACKED_ITEMS_KEY);
+    localStorage.removeItem(GUEST_CHECKOFF_COUNT_KEY);
     localStorage.removeItem(LEGACY_GUEST_STORAGE_KEY);
   } catch {
     // Ignore storage failures.
@@ -166,6 +168,37 @@ export function setGuestItemPacked(itemName: string, packed: boolean): void {
   if (!name) return;
   const current = readGuestPackedItems();
   writeGuestPackedItems({ ...current, [name]: packed });
+}
+
+export function readGuestCheckoffCount(): number {
+  if (!canUseStorage()) return 0;
+  try {
+    const raw = localStorage.getItem(GUEST_CHECKOFF_COUNT_KEY);
+    if (raw == null) return 0;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function writeGuestCheckoffCount(count: number): void {
+  if (!canUseStorage()) return;
+  try {
+    localStorage.setItem(
+      GUEST_CHECKOFF_COUNT_KEY,
+      String(Math.max(0, Math.floor(count)))
+    );
+  } catch {
+    // Quota / private mode — ignore.
+  }
+}
+
+/** Recompute `guest_checkoff_count` from the current packing list packed flags. */
+export function syncGuestCheckoffCount(items: PackingItem[]): number {
+  const count = items.reduce((n, item) => n + (item.packed ? 1 : 0), 0);
+  writeGuestCheckoffCount(count);
+  return count;
 }
 
 export function applyPackedState(items: PackingItem[]): PackingItem[] {
