@@ -58,3 +58,69 @@ export function getTripSceneBackground({
 
   return "/images/pattern.png";
 }
+
+export type TripDetailBackground =
+  | { kind: "image"; src: string }
+  | { kind: "gradient" };
+
+function isRainCondition(condition: string): boolean {
+  const c = normalizeCondition(condition);
+  return (
+    c.includes("rain") ||
+    c.includes("drizzle") ||
+    c.includes("shower") ||
+    c.includes("thunder")
+  );
+}
+
+function isSnowCondition(condition: string): boolean {
+  return normalizeCondition(condition).includes("snow");
+}
+
+function isClearOrSunny(condition: string): boolean {
+  const c = normalizeCondition(condition);
+  return c.includes("clear") || c.includes("sunny");
+}
+
+function isUsableForecastCondition(condition: string): boolean {
+  const c = normalizeCondition(condition);
+  return c.length > 0 && c !== "unavailable" && c !== "unknown";
+}
+
+/** Stable key for crossfade / React deps. */
+export function tripDetailBackgroundKey(bg: TripDetailBackground): string {
+  return bg.kind === "gradient" ? "gradient" : bg.src;
+}
+
+/**
+ * Trip detail page: scan the full forecast (when available), else fall back to trip type.
+ * Priority: rain → snow → clear/sunny + beach → business → soft gradient.
+ */
+export function resolveTripDetailPageBackground({
+  tripType,
+  conditions,
+}: {
+  tripType: string;
+  conditions: string[];
+}): TripDetailBackground {
+  const type = normalizeTripTypeKey(tripType);
+  const usable = conditions.filter(isUsableForecastCondition);
+
+  if (usable.some(isRainCondition)) {
+    return { kind: "image", src: "/images/rainy-bg.jpg" };
+  }
+
+  if (usable.some(isSnowCondition)) {
+    return { kind: "image", src: "/images/snow-bg.jpg" };
+  }
+
+  if (type === "beach" && usable.some(isClearOrSunny)) {
+    return { kind: "image", src: "/images/beach-bg.jpg" };
+  }
+
+  if (type === "business") {
+    return { kind: "image", src: "/images/city-bg.jpg" };
+  }
+
+  return { kind: "gradient" };
+}

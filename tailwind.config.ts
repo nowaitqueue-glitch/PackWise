@@ -9,11 +9,11 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
+  	fontFamily: {
+  		sans: ["var(--font-sans)", "Nunito", "sans-serif"],
+  		mono: ["var(--font-mono)", ...fontFamily.mono],
+  	},
   	extend: {
-  		fontFamily: {
-  			sans: ["var(--font-sans)", ...fontFamily.sans],
-  			mono: ["var(--font-mono)", ...fontFamily.mono],
-  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -47,7 +47,15 @@ const config: Config = {
 			},
 			border: 'hsl(var(--border))',
 			input: 'hsl(var(--input))',
-			ring: 'hsl(var(--ring))'
+			ring: 'hsl(var(--ring))',
+			brand: {
+				from: 'hsl(var(--brand-from) / <alpha-value>)',
+				to: 'hsl(var(--brand-to) / <alpha-value>)'
+			}
+  		},
+  		backgroundImage: {
+  			'travel-gradient':
+  				'linear-gradient(to right, hsl(var(--brand-from)), hsl(var(--brand-to)))'
   		},
   		borderRadius: {
   			lg: 'var(--radius)',

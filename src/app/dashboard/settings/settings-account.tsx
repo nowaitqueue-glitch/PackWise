@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { KeyRound, Loader2, Mail } from "lucide-react";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,14 +23,14 @@ type SettingsAccountProps = {
 
 export function SettingsAccount({ email }: SettingsAccountProps) {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="account-email">Email</Label>
         <Input
           id="account-email"
           value={email}
           readOnly
-          className="bg-muted/40"
+          className="cursor-default"
         />
         <p className="text-xs text-muted-foreground">
           Your sign-in email. Use Change email to update it.
@@ -38,8 +38,20 @@ export function SettingsAccount({ email }: SettingsAccountProps) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <ChangePasswordDialog email={email} />
         <ChangeEmailDialog />
+      </div>
+    </div>
+  );
+}
+
+export function SettingsPassword({ email }: SettingsAccountProps) {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Passwords must be at least 8 characters.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <ChangePasswordDialog email={email} />
       </div>
     </div>
   );
@@ -69,7 +81,8 @@ function ChangePasswordDialog({ email }: { email: string }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="secondary">
+          <KeyRound aria-hidden />
           Change password
         </Button>
       </DialogTrigger>
@@ -81,7 +94,7 @@ function ChangePasswordDialog({ email }: { email: string }) {
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="old-password">Current password</Label>
             <Input
               id="old-password"
@@ -92,7 +105,7 @@ function ChangePasswordDialog({ email }: { email: string }) {
               disabled={isPending}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="new-password">New password</Label>
             <Input
               id="new-password"
@@ -103,7 +116,7 @@ function ChangePasswordDialog({ email }: { email: string }) {
               disabled={isPending}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="confirm-password">Confirm new password</Label>
             <Input
               id="confirm-password"
@@ -115,7 +128,7 @@ function ChangePasswordDialog({ email }: { email: string }) {
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button
             type="button"
             variant="outline"
@@ -216,7 +229,8 @@ function ChangeEmailDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline">
+        <Button type="button" variant="secondary">
+          <Mail aria-hidden />
           Change email
         </Button>
       </DialogTrigger>
@@ -228,7 +242,7 @@ function ChangeEmailDialog() {
             email stays active until you verify the new one.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-1.5 py-2">
+        <div className="flex flex-col gap-2 py-2">
           <Label htmlFor="new-email">New email</Label>
           <Input
             id="new-email"
@@ -240,7 +254,7 @@ function ChangeEmailDialog() {
             placeholder="you@example.com"
           />
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button
             type="button"
             variant="outline"

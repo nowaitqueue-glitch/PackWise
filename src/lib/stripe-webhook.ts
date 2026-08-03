@@ -26,15 +26,44 @@ export async function claimWebhookEvent(
   admin: SupabaseClient,
   stripeEventId: string
 ): Promise<"claimed" | "duplicate"> {
-  const { error } = await admin.from("webhook_events").insert({
+  const { data: existing, error: selectError } = await admin
+    .from("webhook_events")
+    .select("id")
+    .eq("stripe_event_id", stripeEventId)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(`webhook_events select failed: ${selectError.message}`);
+  }
+  if (existing) return "duplicate";
+
+  const { error: insertError } = await admin.from("webhook_events").insert({
     stripe_event_id: stripeEventId,
   });
 
-  if (!error) return "claimed";
+  if (!insertError) return "claimed";
+  if (insertError.code === "23505") return "duplicate";
 
-  if (error.code === "23505") return "duplicate";
+  throw new Error(`webhook_events insert failed: ${insertError.message}`);
+}
 
-  throw new Error(`webhook_events insert failed: ${error.message}`);
+/** Delete claim so Stripe retries can reprocess after a failed handler. */
+export async function releaseWebhookEvent(
+  admin: SupabaseClient,
+  stripeEventId: string
+): Promise<void> {
+  const { error } = await admin
+    .from("webhook_events")
+    .delete()
+    .eq("stripe_event_id", stripeEventId);
+
+  if (error) {
+    console.error(
+      "[stripe webhook] releaseWebhookEvent failed:",
+      stripeEventId,
+      error.message
+    );
+  }
 }
 
 function resolveUserId(

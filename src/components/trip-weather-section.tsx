@@ -1,7 +1,6 @@
 import { getTripWeather } from "@/app/dashboard/weather-actions";
-import { TripSceneConditionSync } from "@/components/trip-scene-background";
+import { TripSceneForecastSync } from "@/components/trip-scene-background";
 import { TripWeatherForecast } from "@/components/trip-weather-forecast";
-import { isKnownForecastDay } from "@/lib/weather";
 
 type TripWeatherSectionProps = {
   tripId: string;
@@ -13,7 +12,6 @@ type TripWeatherSectionProps = {
  * Async server component that resolves trip weather (cache → Open-Meteo).
  * Rendered inside a <Suspense> boundary so the slow forecast fetch streams in
  * without blocking the trip header / packing list from reaching the client.
- * Also syncs the first-day condition into TripSceneBackgroundRoot when available.
  */
 export async function TripWeatherSection({
   tripId,
@@ -22,22 +20,14 @@ export async function TripWeatherSection({
 }: TripWeatherSectionProps) {
   const weather = await getTripWeather(tripId);
 
-  const firstDayCondition =
+  const forecastConditions =
     weather.ok
-      ? (weather.data.days.find(isKnownForecastDay) ?? weather.data.days[0])
-          ?.condition ?? null
-      : null;
-
-  const syncCondition =
-    firstDayCondition &&
-    firstDayCondition !== "unavailable" &&
-    firstDayCondition !== "unknown"
-      ? firstDayCondition
-      : null;
+      ? weather.data.days.map((day) => day.condition)
+      : [];
 
   return (
     <>
-      <TripSceneConditionSync condition={syncCondition} />
+      <TripSceneForecastSync conditions={forecastConditions} />
       <TripWeatherForecast
         weather={weather}
         startDate={startDate}

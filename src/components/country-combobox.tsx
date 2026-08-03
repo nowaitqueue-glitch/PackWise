@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, fieldClass } from "@/lib/utils";
 import {
   OTHER_COUNTRIES,
   POPULAR_COUNTRIES,
@@ -57,7 +57,8 @@ export const CountryCombobox = forwardRef<
           disabled={disabled}
           data-testid="country-combobox"
           className={cn(
-            "w-full justify-between font-normal",
+            fieldClass,
+            "h-12 justify-between font-normal",
             !selectedLabel && "text-muted-foreground",
             className
           )}
@@ -66,11 +67,11 @@ export const CountryCombobox = forwardRef<
           <span className="truncate">
             {selectedLabel ?? "Select country…"}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] p-0"
+        className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
         align="start"
       >
         <Command>
@@ -86,6 +87,10 @@ export const CountryCombobox = forwardRef<
                   key={country.code}
                   value={`${country.name} ${country.code}`}
                   data-testid={`country-option-${country.code}`}
+                  className={cn(
+                    "px-3 py-2.5",
+                    value === country.code && "bg-brand-from/10 font-semibold"
+                  )}
                   onSelect={() => {
                     onChange(country.code === value ? "" : country.code);
                     setOpen(false);
@@ -93,9 +98,10 @@ export const CountryCombobox = forwardRef<
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "h-4 w-4 text-brand-from",
                       value === country.code ? "opacity-100" : "opacity-0"
                     )}
+                    aria-hidden
                   />
                   <span className="truncate">{country.name}</span>
                   <span className="ml-auto text-xs text-muted-foreground">
@@ -110,6 +116,10 @@ export const CountryCombobox = forwardRef<
                   key={country.code}
                   value={`${country.name} ${country.code}`}
                   data-testid={`country-option-${country.code}`}
+                  className={cn(
+                    "px-3 py-2.5",
+                    value === country.code && "bg-brand-from/10 font-semibold"
+                  )}
                   onSelect={() => {
                     onChange(country.code === value ? "" : country.code);
                     setOpen(false);
@@ -117,9 +127,10 @@ export const CountryCombobox = forwardRef<
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "h-4 w-4 text-brand-from",
                       value === country.code ? "opacity-100" : "opacity-0"
                     )}
+                    aria-hidden
                   />
                   <span className="truncate">{country.name}</span>
                   <span className="ml-auto text-xs text-muted-foreground">

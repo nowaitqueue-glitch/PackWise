@@ -5,12 +5,10 @@ import { resolveTripWeatherForecast } from "@/lib/trip-weather-cache";
 import {
   getWeatherForecast,
   WeatherError,
-  type WeatherForecastResult,
+  type WeatherResultState,
 } from "@/lib/weather";
 
-export type GetTripWeatherState =
-  | { ok: true; data: WeatherForecastResult }
-  | { ok: false; error: string; code?: string };
+export type GetTripWeatherState = WeatherResultState;
 
 /**
  * Loads daily weather for a trip (auth + RLS access check).

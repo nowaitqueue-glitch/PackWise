@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, travelGradientText } from "@/lib/utils";
 
 type BrandLogoProps = {
   href?: string | null;
@@ -12,27 +12,39 @@ export function BrandLogo({ href = "/", className }: BrandLogoProps) {
     <>
       <Image
         src="/images/logo.png"
-        alt="PackWise"
+        alt={href ? "PackWise home" : "PackWise"}
         width={40}
         height={40}
         className="h-10 w-auto"
         priority
       />
-      <span className="hidden text-lg font-semibold tracking-tight text-foreground sm:inline">
+      <span
+        className={cn(
+          "text-base font-bold tracking-tight sm:text-lg",
+          travelGradientText
+        )}
+      >
         PackWise
       </span>
     </>
   );
 
-  const classes = cn("inline-flex items-center gap-2", className);
+  const base = "inline-flex items-center gap-2 rounded-xl";
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <Link
+        href={href}
+        className={cn(
+          base,
+          "no-underline transition-opacity hover:opacity-80",
+          className
+        )}
+      >
         {content}
       </Link>
     );
   }
 
-  return <div className={classes}>{content}</div>;
+  return <div className={cn(base, className)}>{content}</div>;
 }

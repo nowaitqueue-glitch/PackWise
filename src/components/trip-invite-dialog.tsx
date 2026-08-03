@@ -96,7 +96,12 @@ export function TripInviteDialog({ tripId }: TripInviteDialogProps) {
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="w-full">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          aria-label="Invite people to this trip"
+        >
           <UserPlus aria-hidden />
           Invite
         </Button>
@@ -129,12 +134,18 @@ export function TripInviteDialog({ tripId }: TripInviteDialogProps) {
             </Button>
 
             {shareUrl ? (
-              <div className="flex gap-2">
-                <Input readOnly value={shareUrl} className="font-mono text-xs" />
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={shareUrl}
+                  aria-label="Invite link"
+                  className="min-w-0 flex-1 font-mono text-xs"
+                />
                 <Button
                   type="button"
                   variant="secondary"
                   size="icon"
+                  className="shrink-0"
                   onClick={handleCopy}
                   aria-label="Copy invite link"
                 >
@@ -144,15 +155,18 @@ export function TripInviteDialog({ tripId }: TripInviteDialogProps) {
             ) : null}
           </div>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or add by email
-              </span>
-            </div>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="h-px flex-1 bg-gradient-to-r from-transparent to-border"
+            />
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Or add by email
+            </span>
+            <span
+              aria-hidden
+              className="h-px flex-1 bg-gradient-to-l from-transparent to-border"
+            />
           </div>
 
           <form onSubmit={handleAddByEmail} className="flex flex-col gap-3">

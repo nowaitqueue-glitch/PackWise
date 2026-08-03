@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { deleteAccount } from "@/app/dashboard/settings/delete-account-actions";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import {
@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { deleteButtonIconClass } from "@/lib/utils";
 
 const CONFIRM_WORD = "DELETE";
 
@@ -40,7 +41,8 @@ export function DeleteAccountButton() {
       }}
     >
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="destructive">
+        <Button type="button" variant="destructive" className="group w-full sm:w-auto">
+          <Trash2 className={deleteButtonIconClass} aria-hidden />
           Delete Account
         </Button>
       </AlertDialogTrigger>
@@ -67,7 +69,7 @@ export function DeleteAccountButton() {
             disabled={isPending}
           />
         </div>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="gap-2">
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <Button
             type="button"

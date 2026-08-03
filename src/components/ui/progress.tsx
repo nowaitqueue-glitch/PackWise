@@ -4,10 +4,12 @@ import { cn } from "@/lib/utils";
 
 type ProgressProps = React.HTMLAttributes<HTMLDivElement> & {
   value?: number;
+  /** Classes applied to the filled indicator bar. */
+  indicatorClassName?: string;
 };
 
 const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value = 0, ...props }, ref) => {
+  ({ className, indicatorClassName, value = 0, ...props }, ref) => {
     const clamped = Math.min(100, Math.max(0, value));
 
     return (
@@ -18,13 +20,16 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         aria-valuemax={100}
         aria-valuenow={clamped}
         className={cn(
-          "relative h-2 w-full overflow-hidden rounded-full bg-primary/20",
+          "relative h-2.5 w-full overflow-hidden rounded-full bg-slate-900/10 dark:bg-white/10",
           className
         )}
         {...props}
       >
         <div
-          className="h-full w-full flex-1 bg-primary transition-transform duration-300 ease-out"
+          className={cn(
+            "h-full w-full flex-1 rounded-full transition-[transform,background] duration-500 ease-out",
+            indicatorClassName ?? "bg-primary"
+          )}
           style={{ transform: `translateX(-${100 - clamped}%)` }}
         />
       </div>

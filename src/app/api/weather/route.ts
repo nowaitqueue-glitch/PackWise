@@ -81,9 +81,9 @@ async function getAuthenticatedUser(request: NextRequest) {
 /**
  * GET /api/weather?destination=Paris&startDate=2026-07-20&endDate=2026-07-24
  *
- * Auth required (cookie session or Authorization Bearer). Rate-limited to
- * 30 requests/minute per authenticated user id (IP bucket for unauthenticated
- * probes before 401). Dashboard weather-actions call getWeatherForecast /
+ * Cookie session, Authorization Bearer, or unauthenticated guest callers.
+ * Rate-limited to 30 requests/minute per authenticated user id, or per IP
+ * for guests. Dashboard weather-actions call getWeatherForecast /
  * resolveTripWeatherForecast directly and bypass this route entirely.
  *
  * Server-only: Open-Meteo forecast with static climate fallback for every trip day.
@@ -91,17 +91,10 @@ async function getAuthenticatedUser(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
-  if (!user) {
-    const ipLimit = checkRateLimit(`ip:${clientIp(request)}`);
-    if (!ipLimit.allowed) {
-      return rateLimitExceeded(ipLimit.retryAfterSec);
-    }
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
-  const userLimit = checkRateLimit(`user:${user.id}`);
-  if (!userLimit.allowed) {
-    return rateLimitExceeded(userLimit.retryAfterSec);
+  const rateKey = user ? `user:${user.id}` : `ip:${clientIp(request)}`;
+  const limit = checkRateLimit(rateKey);
+  if (!limit.allowed) {
+    return rateLimitExceeded(limit.retryAfterSec);
   }
 
   const { searchParams } = request.nextUrl;

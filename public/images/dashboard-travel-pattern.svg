@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <g stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- compass -->
+    <g transform="translate(12 14)">
+      <circle cx="14" cy="14" r="11" />
+      <path d="M14 6v4M14 18v4M6 14h4M18 14h4" />
+      <path d="M14 10l-2.5 4.5h5L14 10z" fill="currentColor" stroke="none" />
+    </g>
+    <!-- airplane -->
+    <g transform="translate(72 22)">
+      <path d="M2 12 L22 6 L14 12 L22 18 Z" fill="currentColor" stroke="none" opacity="0.85" />
+      <path d="M6 12h12M14 9v6" />
+    </g>
+    <!-- map pin -->
+    <g transform="translate(38 78)">
+      <path d="M10 2c-3.3 0-6 2.5-6 5.6 0 4.2 6 10.4 6 10.4s6-6.2 6-10.4C16 4.5 13.3 2 10 2z" />
+      <circle cx="10" cy="7.5" r="2" />
+    </g>
+    <!-- small compass (secondary tile) -->
+    <g transform="translate(88 82)" opacity="0.7">
+      <circle cx="8" cy="8" r="7" />
+      <path d="M8 4v2M8 10v2M4 8h2M10 8h2" />
+    </g>
+    <!-- pin (secondary) -->
+    <g transform="translate(8 72)" opacity="0.6">
+      <path d="M6 1c-2 0-3.5 1.5-3.5 3.3 0 2.5 3.5 6.2 3.5 6.2s3.5-3.7 3.5-6.2C9.5 2.5 8 1 6 1z" />
+    </g>
+  </g>
+</svg>

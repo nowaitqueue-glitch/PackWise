@@ -15,8 +15,10 @@ export function NewTripFab({ className }: NewTripFabProps) {
       asChild
       size="icon"
       className={cn(
-        "fixed z-50 h-14 w-14 rounded-full shadow-lg transition-transform hover:scale-105 hover:shadow-xl active:scale-95",
-        "bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))]",
+        "fixed z-50 h-14 w-14 rounded-full shadow-xl shadow-brand-from/25 hover:scale-105 hover:shadow-2xl active:scale-95",
+        "bottom-[calc(var(--consent-h,0px)_+_env(safe-area-inset-bottom,0px)_+_1.5rem)] right-[max(1.5rem,env(safe-area-inset-right))]",
+        // Mobile-only: the header exposes "New trip" from sm: up.
+        "sm:hidden",
         "[&_svg]:size-6",
         className
       )}

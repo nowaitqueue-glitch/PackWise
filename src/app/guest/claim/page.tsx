@@ -1,0 +1,169 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Loader2, Luggage } from "lucide-react";
+import { claimGuestTrip } from "@/app/guest/claim/actions";
+import { createClient } from "@/lib/supabase/client";
+import { buildGuestPackingList } from "@/lib/guest-packing";
+import {
+  applyPackedState,
+  clearGuestTrip,
+  readGuestTrip,
+} from "@/lib/guest-storage";
+import type { PackingItem } from "@/lib/packing";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { cn, glassCard, glassContentOverlay, travelGradient } from "@/lib/utils";
+
+export default function GuestClaimPage() {
+  const router = useRouter();
+  const [status, setStatus] = useState<
+    "checking" | "claiming" | "empty" | "error" | "done"
+  >("checking");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/login?next=/guest/claim&from=guest");
+        return;
+      }
+
+      const trip = readGuestTrip();
+      if (!trip) {
+        if (!cancelled) setStatus("empty");
+        return;
+      }
+
+      if (!cancelled) setStatus("claiming");
+
+      let packingItems: PackingItem[] = [];
+      try {
+        const built = await buildGuestPackingList({
+          destination: trip.destination,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          tripType: trip.tripType,
+          travelers: trip.travelers,
+        });
+        packingItems = applyPackedState(built.items);
+      } catch {
+        packingItems = [];
+      }
+
+      const result = await claimGuestTrip({
+        trip: {
+          destination: trip.destination,
+          start_date: trip.startDate,
+          end_date: trip.endDate,
+          trip_type: trip.tripType,
+          travelers: trip.travelers,
+        },
+        packingItems,
+        packingSource: "template",
+      });
+
+      if (cancelled) return;
+
+      if (!result.ok) {
+        setError(result.error);
+        setStatus("error");
+        return;
+      }
+
+      clearGuestTrip();
+      setStatus("done");
+      router.replace(`/dashboard/trips/${result.tripId}?created=1`);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  return (
+    <main className="mx-auto w-full max-w-lg px-4 py-12 sm:py-16">
+      <section className={cn("relative overflow-hidden", glassCard)}>
+        <div aria-hidden className={glassContentOverlay} />
+        <Card className="relative z-10 border-0 bg-transparent shadow-none">
+          <CardHeader>
+            <span
+              aria-hidden
+              className={cn(
+                "mb-2 flex size-12 items-center justify-center rounded-2xl text-white shadow-lg",
+                travelGradient
+              )}
+            >
+              <Luggage className="size-6" />
+            </span>
+            <CardTitle className="text-xl">Saving your guest trip</CardTitle>
+            <CardDescription>
+              Transferring your temporary trip into your PackWise account…
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {status === "checking" ||
+            status === "claiming" ||
+            status === "done" ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2
+                  className="size-4 animate-spin text-primary"
+                  aria-hidden
+                />
+                {status === "done" ? "Redirecting…" : "Please wait…"}
+              </p>
+            ) : null}
+
+            {status === "empty" ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  No guest trip was found in this browser. Create one first, or
+                  go to your dashboard.
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button asChild>
+                    <Link href="/dashboard/guest">Try guest demo</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/dashboard">Dashboard</Link>
+                  </Button>
+                </div>
+              </>
+            ) : null}
+
+            {status === "error" ? (
+              <>
+                <p className="text-sm font-medium text-destructive">
+                  {error ?? "Could not save your guest trip."}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button asChild>
+                    <Link href="/dashboard/guest">Back to guest demo</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/dashboard">Dashboard</Link>
+                  </Button>
+                </div>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+      </section>
+    </main>
+  );
+}

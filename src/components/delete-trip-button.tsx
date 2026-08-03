@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Trash2, X } from "lucide-react";
 import { deleteTrip } from "@/app/dashboard/delete-trip-actions";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import {
@@ -16,14 +16,37 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { cn, deleteButtonIconClass } from "@/lib/utils";
 
 type DeleteTripButtonProps = {
   tripId: string;
   /** Only owners may delete; callers should pass trip.isOwner. */
   isOwner: boolean;
+  /**
+   * `icon` — absolute corner control on trip cards (default).
+   * `button` — inline outline control for trip detail actions.
+   */
+  appearance?: "icon" | "button";
+  /**
+   * Spec alias: `outline` renders the inline danger outline control
+   * (same as `appearance="button"`).
+   */
+  variant?: "outline";
+  /** Where to navigate after a successful delete (trip detail → dashboard). */
+  redirectTo?: string;
+  className?: string;
 };
 
-export function DeleteTripButton({ tripId, isOwner }: DeleteTripButtonProps) {
+export function DeleteTripButton({
+  tripId,
+  isOwner,
+  appearance = "icon",
+  variant,
+  redirectTo,
+  className,
+}: DeleteTripButtonProps) {
+  const resolvedAppearance =
+    variant === "outline" ? "button" : appearance;
   const router = useRouter();
   const { showBanner } = usePillBanner();
   const [open, setOpen] = useState(false);
@@ -42,19 +65,37 @@ export function DeleteTripButton({ tripId, isOwner }: DeleteTripButtonProps) {
       }}
     >
       <AlertDialogTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="group absolute top-2 right-2 z-10 size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          aria-label="Delete trip"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <X className="size-3.5 transition-transform duration-200 group-hover:rotate-90" />
-        </Button>
+        {resolvedAppearance === "button" ? (
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              "flex-1 border-red-500/40 text-red-600 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 sm:flex-none",
+              className
+            )}
+            aria-label="Delete trip"
+          >
+            <Trash2 aria-hidden />
+            Delete trip
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="destructiveGhost"
+            size="icon"
+            className={cn(
+              "group absolute top-3 right-3 z-10 h-11 w-11 min-h-11 min-w-11 rounded-full p-1.5 [&_svg]:size-7",
+              className
+            )}
+            aria-label="Delete trip"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <X className={cn(deleteButtonIconClass)} />
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -79,7 +120,11 @@ export function DeleteTripButton({ tripId, isOwner }: DeleteTripButtonProps) {
                 }
                 setOpen(false);
                 showBanner({ message: "Trip deleted.", variant: "success" });
-                router.refresh();
+                if (redirectTo) {
+                  router.push(redirectTo);
+                } else {
+                  router.refresh();
+                }
               });
             }}
           >

@@ -2,10 +2,10 @@
   "name": "PackWise",
   "short_name": "PackWise",
   "description": "Smart packing lists for every trip",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0f766e",
+  "background_color": "#09090b",
+  "theme_color": "#3B82F6",
   "orientation": "portrait-primary",
   "icons": [
     {

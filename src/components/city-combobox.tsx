@@ -23,7 +23,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { citiesByCountry } from "@/lib/cities";
-import { cn } from "@/lib/utils";
+import { cn, fieldClass } from "@/lib/utils";
 
 type CityOption = {
   value: string;
@@ -154,7 +154,8 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
             disabled={isDisabled}
             data-testid="city-combobox"
             className={cn(
-              "w-full justify-between font-normal",
+              fieldClass,
+              "h-12 justify-between font-normal",
               !value && "text-muted-foreground",
               className
             )}
@@ -164,11 +165,14 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
               {value ||
                 (hasCountry ? "Search city…" : "Select a country first")}
             </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown
+              className="h-4 w-4 shrink-0 opacity-50"
+              aria-hidden
+            />
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] p-0"
+          className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
           align="start"
         >
           <Command shouldFilter={false}>
@@ -193,7 +197,7 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
                 <CommandGroup>
                   {showStartTyping ? (
                     <div
-                      className="px-2 py-1.5 text-sm text-muted-foreground"
+                      className="px-3 py-2.5 text-sm text-muted-foreground"
                       data-testid="city-combobox-start-typing"
                     >
                       Start typing to search
@@ -201,7 +205,7 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
                   ) : null}
                   {showNoCities ? (
                     <div
-                      className="px-2 py-1.5 text-sm text-muted-foreground"
+                      className="px-3 py-2.5 text-sm text-muted-foreground"
                       data-testid="city-combobox-empty"
                     >
                       No cities found
@@ -211,6 +215,7 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
                     <CommandItem
                       value={`use-${trimmedSearch}`}
                       data-testid="city-option-custom"
+                      className="px-3 py-2.5"
                       onSelect={() => {
                         commitSearchAsValue(trimmedSearch);
                         setOpen(false);
@@ -219,12 +224,13 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
                     >
                       <Check
                         className={cn(
-                          "mr-2 h-4 w-4",
+                          "h-4 w-4 text-brand-from",
                           value.trim().toLowerCase() ===
                             trimmedSearch.toLowerCase()
                             ? "opacity-100"
                             : "opacity-0"
                         )}
+                        aria-hidden
                       />
                       <span className="truncate">Use “{trimmedSearch}”</span>
                     </CommandItem>
@@ -238,13 +244,18 @@ export const CityCombobox = forwardRef<HTMLButtonElement, CityComboboxProps>(
                         key={option.value}
                         value={option.value}
                         data-testid={`city-option-${option.label}`}
+                        className={cn(
+                          "px-3 py-2.5",
+                          selected && "bg-brand-from/10 font-semibold"
+                        )}
                         onSelect={() => selectCity(option.label)}
                       >
                         <Check
                           className={cn(
-                            "mr-2 h-4 w-4",
+                            "h-4 w-4 text-brand-from",
                             selected ? "opacity-100" : "opacity-0"
                           )}
+                          aria-hidden
                         />
                         <span className="truncate">{option.label}</span>
                       </CommandItem>

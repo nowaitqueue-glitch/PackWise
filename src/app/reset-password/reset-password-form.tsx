@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { KeyRound, Loader2, ShieldAlert } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { cn, glassCard, iconTileClass as brandIconTile } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,6 +20,11 @@ import { Label } from "@/components/ui/label";
 const MIN_PASSWORD_LENGTH = 8;
 
 type SessionStatus = "loading" | "ready" | "invalid";
+
+const iconTileClass = cn("mb-2 size-14 rounded-2xl", brandIconTile);
+
+const alertPanelClass =
+  "rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-300";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -126,10 +133,15 @@ export function ResetPasswordForm() {
 
   if (status === "loading") {
     return (
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Reset password</CardTitle>
-          <CardDescription>Verifying your reset link…</CardDescription>
+      <Card className={cn("w-full max-w-sm", glassCard)}>
+        <CardHeader className="items-center text-center">
+          <div className={iconTileClass} aria-hidden>
+            <Loader2 className="size-7 animate-spin" />
+          </div>
+          <CardTitle className="text-2xl">Reset password</CardTitle>
+          <CardDescription role="status" className="leading-relaxed">
+            Verifying your reset link…
+          </CardDescription>
         </CardHeader>
       </Card>
     );
@@ -137,17 +149,25 @@ export function ResetPasswordForm() {
 
   if (status === "invalid") {
     return (
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Link invalid or expired</CardTitle>
-          <CardDescription>
+      <Card className={cn("w-full max-w-sm", glassCard)}>
+        <CardHeader className="items-center text-center">
+          <div className={iconTileClass} aria-hidden>
+            <ShieldAlert className="size-7" />
+          </div>
+          <CardTitle className="text-2xl">Link invalid or expired</CardTitle>
+          <CardDescription
+            role="status"
+            className={cn(alertPanelClass, "mt-2 w-full leading-relaxed")}
+          >
             This password reset link is no longer valid. Request a new one from
             the sign-in page.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild className="w-full">
-            <Link href="/login">Back to sign in</Link>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/login" aria-label="Back to sign in">
+              Back to sign in
+            </Link>
           </Button>
         </CardContent>
       </Card>
@@ -155,10 +175,13 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>Choose a new password</CardTitle>
-        <CardDescription>
+    <Card className={cn("w-full max-w-sm", glassCard)}>
+      <CardHeader className="items-center text-center">
+        <div className={iconTileClass} aria-hidden>
+          <KeyRound className="size-7" />
+        </div>
+        <CardTitle className="text-2xl">Choose a new password</CardTitle>
+        <CardDescription className="leading-relaxed">
           Enter a new password for your PackWise account.
         </CardDescription>
       </CardHeader>
@@ -176,6 +199,7 @@ export function ResetPasswordForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              aria-label="New password"
             />
           </div>
           <div className="flex flex-col gap-2">
@@ -190,14 +214,21 @@ export function ResetPasswordForm() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
+              aria-label="Confirm password"
             />
           </div>
           {error ? (
-            <p className="text-sm text-destructive" role="alert">
+            <p className={alertPanelClass} role="alert">
               {error}
             </p>
           ) : null}
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            disabled={loading}
+            aria-label="Update password"
+          >
             {loading ? "Saving…" : "Update password"}
           </Button>
         </form>

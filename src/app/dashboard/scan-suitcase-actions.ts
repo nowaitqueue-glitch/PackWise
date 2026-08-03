@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "crypto";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   DEFAULT_GEMINI_MODEL,
@@ -8,6 +9,7 @@ import {
   getGeminiApiKey,
   getGeminiModel,
 } from "@/lib/gemini";
+import { parsePackingItems } from "@/lib/packing";
 import {
   consumeScanCredit,
   getScanQuota,
@@ -298,4 +300,127 @@ export async function scanSuitcase(
     scansRemaining,
     isPro,
   };
+}
+
+export type AddSuitcaseSuggestionsResult =
+  | { ok: true; added: number; skipped: number }
+  | { ok: false; error: string; code?: string };
+
+/**
+ * Appends Suitcase Snap suggestions as custom packing items.
+ * Skips names already present on the trip packing list (case-insensitive).
+ * Owner-only — same gate as createCustomPackingItem.
+ */
+export async function addSuitcaseSuggestionsToList(params: {
+  tripId: string;
+  suggestions: string[];
+}): Promise<AddSuitcaseSuggestionsResult> {
+  const tripId = params.tripId.trim();
+  if (!tripId) {
+    return { ok: false, error: "Missing trip id.", code: "INVALID_INPUT" };
+  }
+
+  const names = Array.from(
+    new Set(
+      params.suggestions
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (names.length === 0) {
+    return { ok: false, error: "No suggestions to add.", code: "EMPTY" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "You must be signed in.", code: "UNAUTHORIZED" };
+  }
+
+  const { data: trip, error: tripError } = await supabase
+    .from("trips")
+    .select("id, user_id")
+    .eq("id", tripId)
+    .maybeSingle();
+
+  if (tripError || !trip) {
+    return { ok: false, error: "Trip not found.", code: "NOT_FOUND" };
+  }
+
+  if (trip.user_id !== user.id) {
+    return {
+      ok: false,
+      error: "Only the trip owner can update the packing list.",
+      code: "FORBIDDEN",
+    };
+  }
+
+  const [{ data: packingList }, { data: customRows, error: customError }] =
+    await Promise.all([
+      supabase
+        .from("packing_lists")
+        .select("items")
+        .eq("trip_id", tripId)
+        .maybeSingle(),
+      supabase
+        .from("packing_custom_items")
+        .select("name")
+        .eq("trip_id", tripId),
+    ]);
+
+  if (customError) {
+    return {
+      ok: false,
+      error: customError.message,
+      code: "LOOKUP_FAILED",
+    };
+  }
+
+  const existingNames = new Set<string>();
+  for (const item of parsePackingItems(packingList?.items)) {
+    existingNames.add(item.name.trim().toLowerCase());
+  }
+  for (const row of customRows ?? []) {
+    if (typeof row.name === "string" && row.name.trim()) {
+      existingNames.add(row.name.trim().toLowerCase());
+    }
+  }
+
+  const toAdd = names.filter(
+    (name) => !existingNames.has(name.toLowerCase())
+  );
+  const skipped = names.length - toAdd.length;
+
+  if (toAdd.length === 0) {
+    return { ok: true, added: 0, skipped };
+  }
+
+  const { error: insertError } = await supabase
+    .from("packing_custom_items")
+    .insert(
+      toAdd.map((name) => ({
+        trip_id: tripId,
+        user_id: user.id,
+        name,
+        category: "Miscellaneous",
+        notes: "From Suitcase Snap",
+        packed: false,
+      }))
+    );
+
+  if (insertError) {
+    return {
+      ok: false,
+      error: insertError.message,
+      code: "INSERT_FAILED",
+    };
+  }
+
+  revalidatePath(`/dashboard/trips/${tripId}`);
+  return { ok: true, added: toAdd.length, skipped };
 }

@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn, glassCard } from "@/lib/utils";
 
 type JoinTripPageProps = {
   params: { token: string };
@@ -37,10 +38,10 @@ export default async function JoinTripPage({ params }: JoinTripPageProps) {
 
   // joinTripByToken redirects on success; only error path reaches here
   return (
-    <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4 py-10">
-      <Card className="w-full max-w-md">
+    <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-10">
+      <Card className={cn("w-full max-w-md", glassCard)}>
         <CardHeader>
-          <CardTitle>Could not join trip</CardTitle>
+          <CardTitle className="text-xl">Could not join trip</CardTitle>
           <CardDescription>
             {result.ok
               ? "Something went wrong."

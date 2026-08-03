@@ -80,6 +80,23 @@ function hasE2ECredentials(): boolean {
   return hasSupabase && hasUser;
 }
 
+/** Cookie banner (z-[60]) can cover Create trip — dismiss if present. */
+async function dismissCookieConsentIfVisible(
+  page: Page,
+  timeoutMs = 5_000
+) {
+  const accept = page.getByRole("button", {
+    name: "Accept analytics cookies",
+  });
+  try {
+    await accept.waitFor({ state: "visible", timeout: timeoutMs });
+  } catch {
+    return;
+  }
+  await accept.click();
+  await expect(accept).toBeHidden({ timeout: 5_000 });
+}
+
 test.describe("PackWise packing flow", () => {
   test.beforeEach(() => {
     test.skip(
@@ -95,8 +112,12 @@ test.describe("PackWise packing flow", () => {
     await page.goto(`${origin}/dashboard`);
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
     expect(new URL(page.url()).hostname).toBe(new URL(origin).hostname);
+    await dismissCookieConsentIfVisible(page);
+
     await page.goto("/dashboard/new-trip");
     await expect(page.getByTestId("new-trip-form")).toBeVisible();
+    // Safety net if consent wasn't set yet (banner mounts after useEffect).
+    await dismissCookieConsentIfVisible(page, 2_000);
 
     // Country first — city search requires a selected country.
     await page.getByTestId("country-combobox").click();

@@ -1,8 +1,12 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Camera, Loader2, Sparkles } from "lucide-react";
-import { scanSuitcase } from "@/app/dashboard/scan-suitcase-actions";
+import { useRouter } from "next/navigation";
+import { ListPlus, Loader2, Sparkles } from "lucide-react";
+import {
+  addSuitcaseSuggestionsToList,
+  scanSuitcase,
+} from "@/app/dashboard/scan-suitcase-actions";
 import { createProCheckoutSession } from "@/app/dashboard/billing-actions";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import { Badge } from "@/components/ui/badge";
@@ -22,29 +26,45 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  cn,
+  glassCardHover,
+  solidContentCard,
+  sectionTitleClass,
+} from "@/lib/utils";
+
+const ANALYZE_MIN_MS = 1500;
 
 type TripSuitcaseScanProps = {
   tripId: string;
   isPro: boolean;
   /** Remaining free scans this month; ignored when isPro. */
   scansRemaining: number;
+  /** Owner can append suggestions to the packing list. */
+  canEdit?: boolean;
 };
 
 export function TripSuitcaseScan({
   tripId,
   isPro,
   scansRemaining: initialScansRemaining,
+  canEdit = false,
 }: TripSuitcaseScanProps) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const { showBanner } = usePillBanner();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[] | null>(null);
   const [scansRemaining, setScansRemaining] = useState(initialScansRemaining);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [isAnalyzingOverlay, setIsAnalyzingOverlay] = useState(false);
+  const [addedAll, setAddedAll] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isCheckoutPending, startCheckout] = useTransition();
+  const [isAddAllPending, startAddAll] = useTransition();
 
   const outOfScans = !isPro && scansRemaining <= 0;
+  const showAnalyzing = isAnalyzingOverlay || isPending;
 
   function openCamera() {
     if (outOfScans) {
@@ -92,33 +112,77 @@ export function TripSuitcaseScan({
       return objectUrl;
     });
     setSuggestions(null);
+    setAddedAll(false);
+    setIsAnalyzingOverlay(true);
 
     const formData = new FormData();
     formData.set("tripId", tripId);
     formData.set("image", file);
 
     startTransition(async () => {
-      const result = await scanSuitcase(formData);
+      const minDelay = new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ANALYZE_MIN_MS);
+      });
+
+      try {
+        const [result] = await Promise.all([scanSuitcase(formData), minDelay]);
+        if (!result.ok) {
+          showBanner({ message: result.error, variant: "error" });
+          setSuggestions(null);
+          if (result.code === "SCAN_LIMIT") {
+            setScansRemaining(0);
+            setUpgradeOpen(true);
+          }
+          return;
+        }
+        setSuggestions(result.suggestions);
+        if (typeof result.scansRemaining === "number") {
+          setScansRemaining(result.scansRemaining);
+        }
+        showBanner({
+          message:
+            result.suggestions.length > 0
+              ? "Scan complete — see suggestions below."
+              : "Scan complete — nothing obvious missing.",
+          variant: "success",
+        });
+      } finally {
+        setIsAnalyzingOverlay(false);
+      }
+    });
+  }
+
+  function handleAddAll() {
+    if (!canEdit || !suggestions || suggestions.length === 0 || addedAll) {
+      return;
+    }
+
+    startAddAll(async () => {
+      const result = await addSuitcaseSuggestionsToList({
+        tripId,
+        suggestions,
+      });
       if (!result.ok) {
         showBanner({ message: result.error, variant: "error" });
-        setSuggestions(null);
-        if (result.code === "SCAN_LIMIT") {
-          setScansRemaining(0);
-          setUpgradeOpen(true);
-        }
         return;
       }
-      setSuggestions(result.suggestions);
-      if (typeof result.scansRemaining === "number") {
-        setScansRemaining(result.scansRemaining);
+
+      setAddedAll(true);
+      if (result.added === 0) {
+        showBanner({
+          message:
+            result.skipped > 0
+              ? "All suggestions are already on your list."
+              : "Nothing new to add.",
+          variant: "success",
+        });
+      } else {
+        showBanner({
+          message: `Added ${result.added} item${result.added === 1 ? "" : "s"} to your list`,
+          variant: "success",
+        });
       }
-      showBanner({
-        message:
-          result.suggestions.length > 0
-            ? "Scan complete — see suggestions below."
-            : "Scan complete — nothing obvious missing.",
-        variant: "success",
-      });
+      router.refresh();
     });
   }
 
@@ -127,10 +191,16 @@ export function TripSuitcaseScan({
     : `${scansRemaining} scan${scansRemaining === 1 ? "" : "s"} left`;
 
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <Card
+      className={cn(
+        "relative w-full overflow-hidden",
+        solidContentCard,
+        glassCardHover
+      )}
+    >
+      <CardHeader className="relative z-10">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-lg">Scan My Suitcase</CardTitle>
+          <CardTitle className={sectionTitleClass}>Scan My Suitcase</CardTitle>
           {isPro ? (
             <Badge variant="pro">Pro · Unlimited</Badge>
           ) : (
@@ -147,7 +217,7 @@ export function TripSuitcaseScan({
             : null}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="relative z-10 flex flex-col gap-4">
         <input
           ref={inputRef}
           type="file"
@@ -172,7 +242,6 @@ export function TripSuitcaseScan({
         ) : (
           <Button
             type="button"
-            variant="outline"
             className="w-full"
             onClick={openCamera}
             disabled={isPending}
@@ -180,15 +249,14 @@ export function TripSuitcaseScan({
           >
             {isPending ? (
               <>
-                <Loader2 className="animate-spin" />
+                <Loader2 className="animate-spin" aria-hidden />
                 Analyzing suitcase…
               </>
             ) : (
               <>
-                <Camera />
-                Scan My Suitcase
+                📸 Scan My Suitcase
                 {!isPro ? (
-                  <span className="text-muted-foreground">
+                  <span className="font-normal text-white/80">
                     ({quotaLabel})
                   </span>
                 ) : null}
@@ -198,18 +266,56 @@ export function TripSuitcaseScan({
         )}
 
         {previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
-            alt="Suitcase preview"
-            className="max-h-56 w-full rounded-lg border border-border object-cover"
-          />
+          <div className="relative overflow-hidden rounded-xl border border-white/40 shadow-md dark:border-white/10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="Suitcase preview"
+              className="max-h-56 w-full object-cover"
+            />
+            {showAnalyzing ? (
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/55 backdrop-blur-[2px]"
+                role="status"
+                aria-live="polite"
+                data-testid="suitcase-analyzing-overlay"
+              >
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-r from-white/10 via-white/25 to-white/10"
+                />
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-6 top-1/3 space-y-2"
+                >
+                  <div className="h-2.5 animate-pulse rounded-full bg-white/35" />
+                  <div className="mx-auto h-2.5 w-4/5 animate-pulse rounded-full bg-white/25" />
+                  <div className="mx-auto h-2.5 w-3/5 animate-pulse rounded-full bg-white/20" />
+                </div>
+                <Loader2
+                  className="relative size-6 animate-spin text-white"
+                  aria-hidden
+                />
+                <p className="relative px-4 text-center text-sm font-semibold text-white">
+                  Analyzing your suitcase…
+                </p>
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {suggestions && suggestions.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-1.5 text-sm font-medium">
-              <Sparkles className="size-4 text-amber-600" />
+          <div
+            className={cn(
+              "flex flex-col gap-3 rounded-xl border border-white/40 bg-white/50 p-4 backdrop-blur-sm",
+              "dark:border-white/10 dark:bg-slate-900/50"
+            )}
+          >
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <Sparkles
+                className="size-4 shrink-0 text-amber-500 dark:text-amber-300"
+                aria-hidden
+              />
               Suggestions
             </div>
             <ul className="list-disc space-y-1.5 pl-5 text-sm text-foreground">
@@ -217,6 +323,33 @@ export function TripSuitcaseScan({
                 <li key={`${index}-${item.slice(0, 24)}`}>{item}</li>
               ))}
             </ul>
+            {canEdit ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto sm:self-start"
+                onClick={handleAddAll}
+                disabled={isAddAllPending || addedAll}
+                data-testid="suitcase-add-all"
+              >
+                {isAddAllPending ? (
+                  <>
+                    <Loader2 className="animate-spin" aria-hidden />
+                    Adding…
+                  </>
+                ) : addedAll ? (
+                  <>
+                    <ListPlus aria-hidden />
+                    Added to list
+                  </>
+                ) : (
+                  <>
+                    <ListPlus aria-hidden />
+                    Add all to packing list
+                  </>
+                )}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </CardContent>

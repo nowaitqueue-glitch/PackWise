@@ -43,19 +43,18 @@ export function SettingsNotifications({
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="divide-y divide-slate-900/5 dark:divide-white/10">
       {showPackingReminder ? (
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="packing-reminder" className="text-sm font-medium">
-              Packing reminder email
-            </Label>
+        <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor="packing-reminder">Packing reminder email</Label>
             <p className="text-sm text-muted-foreground">
               Get an email before upcoming trips so you can finish packing.
             </p>
           </div>
           <Switch
             id="packing-reminder"
+            className="mt-0.5 shrink-0"
             checked={packingReminder}
             disabled={isPending}
             onCheckedChange={(checked) => {
@@ -66,11 +65,9 @@ export function SettingsNotifications({
         </div>
       ) : null}
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <Label htmlFor="push-notifications" className="text-sm font-medium">
-            Push notifications
-          </Label>
+      <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
+        <div className="min-w-0 space-y-1">
+          <Label htmlFor="push-notifications">Push notifications</Label>
           <p className="text-sm text-muted-foreground">
             Allow browser notifications when PackWise has trip updates. Your
             browser may still ask for permission.
@@ -78,6 +75,7 @@ export function SettingsNotifications({
         </div>
         <Switch
           id="push-notifications"
+          className="mt-0.5 shrink-0"
           checked={pushEnabled}
           disabled={isPending}
           onCheckedChange={(checked) => {

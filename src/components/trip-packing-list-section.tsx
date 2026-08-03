@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TripPackingList } from "@/components/trip-packing-list";
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
@@ -10,6 +11,7 @@ import {
   type PackingItem,
   type PackingListSource,
 } from "@/lib/packing";
+import { cn, glassChip } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 1_500;
 const POLL_TIMEOUT_MS = 45_000;
@@ -127,10 +129,14 @@ export function TripPackingListSection({
     return (
       <div className="flex flex-col gap-3">
         <p
-          className="text-sm font-medium text-muted-foreground"
+          className={cn(
+            "flex w-fit items-center gap-2 px-3 py-1.5 text-sm font-semibold text-foreground",
+            glassChip
+          )}
           aria-live="polite"
           data-testid="packing-list-generating"
         >
+          <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
           Generating…
         </p>
         <TripPackingListSkeleton />

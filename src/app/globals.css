@@ -4,48 +4,57 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    /* Soft neutral canvas (slate-50) with a travel-blue accent system. */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 15%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 19% 42%;
+    --accent: 199 89% 94%;
+    --accent-foreground: 217 60% 25%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.5rem;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 89%;
+    --input: 214 32% 89%;
+    --ring: 213 94% 62%;
+    --radius: 0.75rem;
+
+    /* Brand gradient stops — keep button/badge/hero gradients in sync. */
+    --brand-from: 217 91% 60%;
+    --brand-to: 172 66% 50%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+    /* Deep navy rather than neutral black, to match the travel theme. */
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+    --card: 222 44% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 44% 11%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 205 90% 60%;
+    --primary-foreground: 222 47% 9%;
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 72%;
+    --accent: 217 33% 22%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 22%;
+    --input: 217 33% 24%;
+    --ring: 205 90% 62%;
+
+    --brand-from: 213 94% 65%;
+    --brand-to: 172 66% 55%;
   }
 }
 
@@ -54,11 +63,54 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-base leading-relaxed text-foreground;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold tracking-tight;
+  }
+  /* Consistent, always-visible keyboard focus across the app. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
 
 @layer utilities {
+  /* `bg-travel-gradient` comes from tailwind.config backgroundImage. */
+  .text-travel-gradient {
+    background-image: linear-gradient(
+      to right,
+      hsl(var(--brand-from)),
+      hsl(var(--brand-to))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Horizontal snap rails (weather day cards). */
+  .snap-rail {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .snap-rail > * {
+    scroll-snap-align: start;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   @keyframes gradientShift {
     0% {
       background-position: 0% 0%;
@@ -72,8 +124,54 @@
   }
 
   .animate-gradient-shift {
-    background-size: 200% 200%;
     animation: gradientShift 15s ease infinite;
+  }
+
+  .trip-detail-gradient-bg {
+    background-image: linear-gradient(
+      -45deg,
+      hsl(var(--brand-from)),
+      hsl(var(--brand-to)),
+      hsl(var(--brand-from)),
+      hsl(var(--brand-to))
+    );
+    background-size: 400% 400%;
+    will-change: background-position;
+  }
+
+  @keyframes packing-check-bounce {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.18);
+    }
+    70% {
+      transform: scale(0.94);
+    }
+  }
+
+  .animate-packing-check-bounce {
+    animation: packing-check-bounce 0.35s ease-out;
+  }
+
+  @keyframes dashboard-float {
+    0% {
+      transform: translateY(0) translateX(0);
+      opacity: 0.35;
+    }
+    70% {
+      opacity: 0.2;
+    }
+    100% {
+      transform: translateY(-115vh) translateX(12px);
+      opacity: 0;
+    }
+  }
+
+  .animate-dashboard-float {
+    animation: dashboard-float linear infinite;
   }
 }
 

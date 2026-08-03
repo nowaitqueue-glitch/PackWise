@@ -15,6 +15,9 @@ import {
 } from "@/lib/packing-export";
 import type { PackingItem } from "@/lib/packing";
 
+const menuItemClass =
+  "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-medium outline-none transition-colors hover:bg-white/70 hover:text-foreground focus-visible:bg-white/70 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/10 dark:focus-visible:bg-white/10";
+
 type TripExportShareProps = {
   destination: string;
   startDate: string;
@@ -130,6 +133,7 @@ export function TripExportShare({
             variant="outline"
             className="w-full sm:flex-1"
             disabled={busy !== null}
+            aria-label="Export packing list"
             data-testid="trip-export"
           >
             <Download aria-hidden />
@@ -139,13 +143,17 @@ export function TripExportShare({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="w-[min(100vw-2rem,16rem)] p-1"
+          className="w-[min(100vw-2rem,16rem)] p-1.5"
         >
-          <div className="flex flex-col" role="menu" aria-label="Export options">
+          <div
+            className="flex flex-col gap-0.5"
+            role="menu"
+            aria-label="Export options"
+          >
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              className={menuItemClass}
               disabled={busy !== null}
               onClick={() => void handleCopyAsText()}
               data-testid="trip-export-copy-text"
@@ -156,7 +164,7 @@ export function TripExportShare({
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              className={menuItemClass}
               disabled={busy !== null}
               onClick={() => void handleSaveAsPdf()}
               data-testid="trip-export-pdf"
@@ -174,6 +182,7 @@ export function TripExportShare({
         className="w-full sm:flex-1"
         disabled={busy !== null}
         onClick={() => void handleShare()}
+        aria-label="Share packing list"
         data-testid="trip-share"
       >
         <Share2 aria-hidden />

@@ -13,4 +13,4 @@ alter table public.webhook_events enable row level security;
 -- Service role bypasses RLS; grant table privileges explicitly.
 revoke all on table public.webhook_events from anon;
 revoke all on table public.webhook_events from authenticated;
-grant all on table public.webhook_events to service_role;
+grant select, insert on table public.webhook_events to service_role;

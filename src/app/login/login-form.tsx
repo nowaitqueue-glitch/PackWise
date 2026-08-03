@@ -1,8 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Briefcase, Loader2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  cn,
+  glassCard,
+  glassChip,
+  iconTileClass as brandIconTile,
+} from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,11 +26,33 @@ import { Label } from "@/components/ui/label";
 type LoginFormProps = {
   nextPath?: string;
   initialBanner?: { message: string; variant: "success" | "error" | "info" } | null;
+  /** When true (e.g. `?from=signup`), title signals account creation. */
+  fromSignup?: boolean;
 };
+
+const cardMotion = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const },
+};
+
+const iconTileClass = cn("mb-2 size-14 rounded-2xl", brandIconTile);
+
+const alertPanelClass =
+  "rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-300";
+
+const infoPanelClass =
+  "rounded-xl border border-brand-from/25 bg-brand-from/10 px-3 py-2 text-sm text-brand-from dark:border-brand-from/25 dark:bg-brand-from/15 dark:text-brand-from";
+
+const dividerLabelClass = cn(
+  glassChip,
+  "px-3 py-0.5 text-xs uppercase tracking-wide text-muted-foreground"
+);
 
 export function LoginForm({
   nextPath = "/dashboard",
   initialBanner = null,
+  fromSignup = false,
 }: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -73,13 +104,10 @@ export function LoginForm({
     setMagicError(null);
 
     const supabase = createClient();
-    console.log("Attempting login with", email);
-    const { data, error: signInError } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-    console.log("signInWithPassword result", data, signInError);
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (signInError) {
       setPasswordLoading(false);
@@ -129,164 +157,257 @@ export function LoginForm({
 
   if (sent) {
     return (
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>
-            We sent a magic link to{" "}
-            <span className="font-medium text-foreground">{email}</span>.
-            Click it to sign in.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => {
-              setSent(false);
-              setEmail("");
-              setPassword("");
-              setMagicError(null);
-              setPasswordError(null);
-            }}
-          >
-            Use a different email
-          </Button>
-        </CardContent>
-      </Card>
+      <motion.div
+        className="mx-4 w-full max-w-sm"
+        {...cardMotion}
+      >
+        <Card className={cn("w-full", glassCard)}>
+          <CardHeader className="items-center text-center">
+            <div className={iconTileClass} aria-hidden>
+              <Mail className="size-7" />
+            </div>
+            <CardTitle className="text-xl">
+              Check your email for the magic link!
+            </CardTitle>
+            <CardDescription
+              role="status"
+              className={cn(infoPanelClass, "mt-2 w-full leading-relaxed")}
+            >
+              We sent a magic link to{" "}
+              <span className="font-semibold">{email}</span>. Click it to sign
+              in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              aria-label="Use a different email"
+              onClick={() => {
+                setSent(false);
+                setEmail("");
+                setPassword("");
+                setMagicError(null);
+                setPasswordError(null);
+              }}
+            >
+              Use a different email
+            </Button>
+            <HomeLink />
+          </CardContent>
+        </Card>
+      </motion.div>
     );
   }
 
   if (resetSent) {
     return (
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>
-            {resetSuccess ??
-              "We sent a password reset link if that email has an account."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => {
-              setResetSent(false);
-              setResetSuccess(null);
-              setResetError(null);
-            }}
-          >
-            Back to sign in
-          </Button>
-        </CardContent>
-      </Card>
+      <motion.div
+        className="mx-4 w-full max-w-sm"
+        {...cardMotion}
+      >
+        <Card className={cn("w-full", glassCard)}>
+          <CardHeader className="items-center text-center">
+            <div className={iconTileClass} aria-hidden>
+              <Mail className="size-7" />
+            </div>
+            <CardTitle className="text-xl">Check your email</CardTitle>
+            <CardDescription
+              role="status"
+              className={cn(infoPanelClass, "mt-2 w-full leading-relaxed")}
+            >
+              {resetSuccess ??
+                "We sent a password reset link if that email has an account."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              aria-label="Back to sign in"
+              onClick={() => {
+                setResetSent(false);
+                setResetSuccess(null);
+                setResetError(null);
+              }}
+            >
+              Back to sign in
+            </Button>
+            <HomeLink />
+          </CardContent>
+        </Card>
+      </motion.div>
     );
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>Sign in to PackWise</CardTitle>
-        <CardDescription>
-          Enter your email and we&apos;ll send you a magic link, or sign in with
-          your password.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-6">
-        {banner ? (
-          <p
-            className={
-              banner.variant === "error"
-                ? "text-sm text-destructive"
-                : "text-sm text-muted-foreground"
-            }
-            role="status"
-          >
-            {banner.message}
-          </p>
-        ) : null}
-        <form onSubmit={handleMagicLink} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              name="email"
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={busy}
-            />
+    <motion.div
+      className="mx-4 w-full max-w-sm"
+      {...cardMotion}
+    >
+      <Card className={cn("w-full", glassCard)}>
+        <CardHeader className="items-center text-center">
+          <div className={iconTileClass} aria-hidden>
+            <Briefcase className="size-7" />
           </div>
-          {magicError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {magicError}
+          <CardTitle className="text-2xl">
+            {fromSignup ? "Welcome to PackWise" : "Sign in to PackWise"}
+          </CardTitle>
+          <CardDescription className="leading-relaxed">
+            Enter your email and we&apos;ll send you a magic link, or sign in with
+            your password.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6">
+          {banner ? (
+            <p
+              className={
+                banner.variant === "error" ? alertPanelClass : infoPanelClass
+              }
+              role="status"
+            >
+              {banner.message}
             </p>
           ) : null}
-          <Button type="submit" className="w-full" disabled={busy}>
-            {magicLoading ? "Sending…" : "Send magic link"}
-          </Button>
-        </form>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">
-              Or continue with password
-            </span>
-          </div>
-        </div>
-
-        <form onSubmit={handlePasswordSignIn} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="password">Password</Label>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+          <form onSubmit={handleMagicLink} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                name="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={busy}
-                onClick={() => void handleForgotPassword()}
-              >
-                {resetLoading ? "Sending…" : "Forgot password?"}
-              </button>
+                aria-label="Email address"
+              />
             </div>
-            <Input
-              id="password"
-              type="password"
-              name="password"
-              placeholder="Your password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+            {magicError ? (
+              <p className={alertPanelClass} role="alert">
+                {magicError}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
               disabled={busy}
-            />
+              aria-label="Send magic link"
+            >
+              {magicLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Sending…
+                </>
+              ) : (
+                "Send magic link"
+              )}
+            </Button>
+          </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-white/50 dark:border-white/10" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className={dividerLabelClass}>or</span>
+            </div>
           </div>
-          {passwordError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {passwordError}
-            </p>
-          ) : null}
-          {resetError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {resetError}
-            </p>
-          ) : null}
-          <Button
-            type="submit"
-            variant="secondary"
-            className="w-full"
-            disabled={busy}
-          >
-            {passwordLoading ? "Signing in…" : "Sign in"}
+
+          <Button asChild variant="secondary" size="lg" className="w-full">
+            <Link href="/dashboard/guest" aria-label="Try PackWise as guest">
+              Try as Guest
+            </Link>
           </Button>
-        </form>
-      </CardContent>
-    </Card>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-white/50 dark:border-white/10" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className={dividerLabelClass}>
+                Or continue with password
+              </span>
+            </div>
+          </div>
+
+          <form onSubmit={handlePasswordSignIn} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  className="rounded-md text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
+                  disabled={busy}
+                  aria-label="Forgot password"
+                  onClick={() => void handleForgotPassword()}
+                >
+                  {resetLoading ? "Sending…" : "Forgot password?"}
+                </button>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                name="password"
+                placeholder="Your password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={busy}
+                aria-label="Password"
+              />
+            </div>
+            {passwordError ? (
+              <p className={alertPanelClass} role="alert">
+                {passwordError}
+              </p>
+            ) : null}
+            {resetError ? (
+              <p className={alertPanelClass} role="alert">
+                {resetError}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              variant="outline"
+              size="lg"
+              className="w-full"
+              disabled={busy}
+              aria-label="Sign in with password"
+            >
+              {passwordLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in"
+              )}
+            </Button>
+          </form>
+
+          <HomeLink />
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+function HomeLink() {
+  return (
+    <p className="text-center text-sm text-muted-foreground">
+      <Link
+        href="/"
+        className="underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        aria-label="Go back to home"
+      >
+        Go back to home
+      </Link>
+    </p>
   );
 }

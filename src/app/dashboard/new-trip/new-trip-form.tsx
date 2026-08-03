@@ -6,6 +6,7 @@ import { useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useRouter } from "next/navigation";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { usePillBanner } from "@/components/pill-banner-provider";
@@ -39,10 +40,22 @@ import {
 import { CountryCombobox } from "@/components/country-combobox";
 import { CityCombobox } from "@/components/city-combobox";
 import { TRIP_TYPES, formatTripType } from "@/lib/trips";
-import { cn } from "@/lib/utils";
+import { composeDestination } from "@/lib/trip-destination";
+import {
+  hasGuestTrip,
+  writeGuestTrip,
+} from "@/lib/guest-storage";
+import { cn, fieldClass, glassCard, sectionTitleClass } from "@/lib/utils";
 import { createTrip, updateTrip, type CreateTripState } from "./actions";
 
 const initialState: CreateTripState = { error: null };
+
+/** Glass panel wrapping one logical group of fields. */
+const sectionClass = "flex flex-col gap-5 p-5 sm:p-6";
+const labelClass = "text-sm font-semibold";
+/** Inline validation copy, as a soft red panel under its field. */
+const errorPanelClass =
+  "rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2";
 
 export type NewTripFormDefaults = {
   city: string;
@@ -57,6 +70,8 @@ type NewTripFormProps = {
   mode?: "create" | "edit";
   tripId?: string;
   defaultValues?: Partial<NewTripFormDefaults>;
+  /** When set, submit builds a local guest trip instead of calling the server. */
+  guestMode?: boolean;
 };
 
 /** Parse a stored `YYYY-MM-DD` string as a local (not UTC) calendar date. */
@@ -128,13 +143,16 @@ export function NewTripForm({
   mode = "create",
   tripId,
   defaultValues,
+  guestMode = false,
 }: NewTripFormProps) {
-  const isEdit = mode === "edit" && Boolean(tripId);
+  const isEdit = !guestMode && mode === "edit" && Boolean(tripId);
+  const router = useRouter();
   const [state, formAction] = useFormState(
     isEdit ? updateTrip : createTrip,
     initialState
   );
   const [isPending, startTransition] = useTransition();
+  const [guestBusy, setGuestBusy] = useState(false);
   const { showBanner } = usePillBanner();
 
   useEffect(() => {
@@ -216,7 +234,54 @@ export function NewTripForm({
     setDateOpen(false);
   }
 
+  async function onGuestValid(values: NewTripValues) {
+    if (hasGuestTrip()) {
+      showBanner({
+        message:
+          "Please create a free account to unlock this feature.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setGuestBusy(true);
+    try {
+      const destination = composeDestination(
+        values.city.trim(),
+        values.countryCode.trim().toUpperCase()
+      );
+      if (!destination) {
+        showBanner({ message: "Destination is required.", variant: "error" });
+        return;
+      }
+
+      writeGuestTrip({
+        destination,
+        startDate: values.start_date,
+        endDate: values.end_date,
+        tripType: values.trip_type,
+        travelers: values.travelers,
+      });
+
+      showBanner({
+        message: "Guest trip created — stored in this browser only.",
+        variant: "success",
+      });
+      router.push("/dashboard/guest");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not create guest trip.";
+      showBanner({ message, variant: "error" });
+    } finally {
+      setGuestBusy(false);
+    }
+  }
+
   function onValid(values: NewTripValues) {
+    if (guestMode) {
+      void onGuestValid(values);
+      return;
+    }
     const formData = new FormData();
     if (isEdit && tripId) {
       formData.set("tripId", tripId);
@@ -232,205 +297,243 @@ export function NewTripForm({
     });
   }
 
+  const busy = isPending || guestBusy;
+
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onValid)}
-        className="flex flex-col gap-4"
+        className="mx-auto flex w-full max-w-2xl flex-col gap-5 sm:gap-6"
         data-testid={isEdit ? "edit-trip-form" : "new-trip-form"}
       >
-        <FormField
-          control={form.control}
-          name="countryCode"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Country</FormLabel>
-              <FormControl>
-                <CountryCombobox
-                  value={field.value}
-                  onChange={(code) => {
-                    field.onChange(code);
-                    form.setValue("city", "");
-                  }}
-                />
-              </FormControl>
-              <FormDescription>
-                Optional, recommended — stored as an ISO country code.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <section className={cn(glassCard, sectionClass)}>
+          <h2 className={sectionTitleClass}>Destination</h2>
 
-        <FormField
-          control={form.control}
-          name="city"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>City</FormLabel>
-              <FormControl>
-                <CityCombobox
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  countryCode={countryCode}
-                />
-              </FormControl>
-              <FormMessage data-testid="city-error" />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="countryCode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className={labelClass}>Country</FormLabel>
+                <FormControl>
+                  <CountryCombobox
+                    value={field.value}
+                    onChange={(code) => {
+                      field.onChange(code);
+                      form.setValue("city", "");
+                    }}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Optional, recommended — stored as an ISO country code.
+                </FormDescription>
+                <FormMessage className={errorPanelClass} />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="start_date"
-          render={() => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Trip dates</FormLabel>
-              <Sheet open={dateOpen} onOpenChange={handleDateOpenChange}>
-                <SheetTrigger asChild>
-                  <FormControl>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      data-testid="date-range-trigger"
+          <FormField
+            control={form.control}
+            name="city"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className={labelClass}>City</FormLabel>
+                <FormControl>
+                  <CityCombobox
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    countryCode={countryCode}
+                  />
+                </FormControl>
+                <FormMessage
+                  className={errorPanelClass}
+                  data-testid="city-error"
+                />
+              </FormItem>
+            )}
+          />
+        </section>
+
+        <section className={cn(glassCard, sectionClass)}>
+          <h2 className={sectionTitleClass}>Dates</h2>
+
+          <FormField
+            control={form.control}
+            name="start_date"
+            render={() => (
+              <FormItem className="flex flex-col">
+                <FormLabel className={labelClass}>Trip dates</FormLabel>
+                <Sheet open={dateOpen} onOpenChange={handleDateOpenChange}>
+                  <SheetTrigger asChild>
+                    <FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        data-testid="date-range-trigger"
+                        className={cn(
+                          fieldClass,
+                          "h-12 justify-start text-left font-normal",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon
+                          className="h-4 w-4 shrink-0 opacity-60"
+                          aria-hidden
+                        />
+                        <span className="truncate">
+                          {formatRangeLabel(selectedRange)}
+                        </span>
+                      </Button>
+                    </FormControl>
+                  </SheetTrigger>
+                  <SheetContent
+                    side="bottom"
+                    className="flex max-h-[90vh] flex-col gap-0 p-0"
+                  >
+                    <SheetHeader className="border-b border-border/60 px-5 py-4 pr-14 text-left">
+                      <SheetTitle>Select Trip Dates</SheetTitle>
+                    </SheetHeader>
+                    <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+                      <div className="flex justify-center">
+                        <Calendar
+                          mode="range"
+                          selected={tempRange}
+                          onSelect={setTempRange}
+                          defaultMonth={tempRange?.from ?? today}
+                          numberOfMonths={numberOfMonths}
+                          disabled={isEdit ? undefined : { before: today }}
+                          autoFocus
+                        />
+                      </div>
+                      {!tempRangeComplete && (
+                        <p
+                          className="mt-4 text-center text-sm text-muted-foreground"
+                          data-testid="date-range-hint"
+                        >
+                          Tap start date, then end date
+                        </p>
+                      )}
+                    </div>
+                    <SheetFooter className="flex-row justify-end gap-3 border-t border-border/60 px-5 py-4 sm:space-x-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCancelDates}
+                        data-testid="date-range-cancel"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleDoneDates}
+                        disabled={!tempRangeComplete}
+                        data-testid="date-range-done"
+                      >
+                        Done
+                      </Button>
+                    </SheetFooter>
+                  </SheetContent>
+                </Sheet>
+                <FormMessage className={errorPanelClass} />
+                {!form.formState.errors.start_date &&
+                  form.formState.errors.end_date && (
+                    <p
                       className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !startDate && "text-muted-foreground"
+                        errorPanelClass,
+                        "text-[0.8rem] font-medium text-destructive"
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {formatRangeLabel(selectedRange)}
-                    </Button>
-                  </FormControl>
-                </SheetTrigger>
-                <SheetContent
-                  side="bottom"
-                  className="flex max-h-[90vh] flex-col gap-0 p-0"
+                      {String(form.formState.errors.end_date.message ?? "")}
+                    </p>
+                  )}
+              </FormItem>
+            )}
+          />
+        </section>
+
+        <section className={cn(glassCard, sectionClass)}>
+          <h2 className={sectionTitleClass}>Trip details</h2>
+
+          <FormField
+            control={form.control}
+            name="trip_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className={labelClass}>Trip type</FormLabel>
+                <Select
+                  value={field.value || undefined}
+                  onValueChange={field.onChange}
                 >
-                  <SheetHeader className="border-b px-4 py-3 text-left">
-                    <SheetTitle>Select Trip Dates</SheetTitle>
-                  </SheetHeader>
-                  <div className="flex-1 overflow-y-auto px-4 py-4">
-                    <div className="flex justify-center">
-                      <Calendar
-                        mode="range"
-                        selected={tempRange}
-                        onSelect={setTempRange}
-                        defaultMonth={tempRange?.from ?? today}
-                        numberOfMonths={numberOfMonths}
-                        disabled={isEdit ? undefined : { before: today }}
-                        autoFocus
-                      />
-                    </div>
-                    {!tempRangeComplete && (
-                      <p
-                        className="mt-2 text-center text-[0.8rem] text-muted-foreground"
-                        data-testid="date-range-hint"
-                      >
-                        Please select both start and end dates.
-                      </p>
-                    )}
-                  </div>
-                  <SheetFooter className="flex-row justify-end gap-2 border-t px-4 py-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCancelDates}
-                      data-testid="date-range-cancel"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleDoneDates}
-                      disabled={!tempRangeComplete}
-                      data-testid="date-range-done"
-                    >
-                      Done
-                    </Button>
-                  </SheetFooter>
-                </SheetContent>
-              </Sheet>
-              <FormMessage />
-              {!form.formState.errors.start_date &&
-                form.formState.errors.end_date && (
-                  <p className="text-[0.8rem] font-medium text-destructive">
-                    {String(form.formState.errors.end_date.message ?? "")}
-                  </p>
-                )}
-            </FormItem>
-          )}
-        />
+                  <FormControl>
+                    <SelectTrigger data-testid="trip-type-select">
+                      <SelectValue placeholder="Select a trip type" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {TRIP_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {formatTripType(type)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage className={errorPanelClass} />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="trip_type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Trip type</FormLabel>
-              <Select value={field.value || undefined} onValueChange={field.onChange}>
+          <FormField
+            control={form.control}
+            name="travelers"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className={labelClass}>
+                  Number of travelers
+                </FormLabel>
                 <FormControl>
-                  <SelectTrigger data-testid="trip-type-select">
-                    <SelectValue placeholder="Select a trip type" />
-                  </SelectTrigger>
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    data-testid="travelers-input"
+                    value={field.value}
+                    onChange={(event) =>
+                      field.onChange(
+                        event.target.value === ""
+                          ? ""
+                          : Number.parseInt(event.target.value, 10)
+                      )
+                    }
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
                 </FormControl>
-                <SelectContent>
-                  {TRIP_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {formatTripType(type)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="travelers"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Number of travelers</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  data-testid="travelers-input"
-                  value={field.value}
-                  onChange={(event) =>
-                    field.onChange(
-                      event.target.value === ""
-                        ? ""
-                        : Number.parseInt(event.target.value, 10)
-                    )
-                  }
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  ref={field.ref}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormMessage className={errorPanelClass} />
+              </FormItem>
+            )}
+          />
+        </section>
 
         <Button
           type="submit"
+          size="lg"
           className="w-full"
-          disabled={isPending || !tripType}
+          disabled={busy || !tripType}
           data-testid={isEdit ? "edit-trip-submit" : "create-trip-submit"}
         >
-          {isPending
-            ? isEdit
-              ? "Saving…"
-              : "Creating…"
-            : isEdit
-              ? "Save changes"
-              : "Create trip"}
+          {busy
+            ? guestMode
+              ? "Building list…"
+              : isEdit
+                ? "Saving…"
+                : "Creating…"
+            : guestMode
+              ? "Create guest trip"
+              : isEdit
+                ? "Save changes"
+                : "Create trip"}
         </Button>
       </form>
     </Form>

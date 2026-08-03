@@ -1,56 +1,60 @@
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
+import { TripSceneBackgroundRoot } from "@/components/trip-scene-background";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn, glassCard } from "@/lib/utils";
 
 function TripDetailsSkeleton() {
   return (
-    <section className="rounded-2xl border border-white/20 bg-white/30 text-foreground backdrop-blur-md dark:border-white/10 dark:bg-white/10">
-      <Card className="w-full border-0 bg-transparent shadow-none">
-        <CardHeader className="space-y-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-5 w-16 rounded-md" />
+    <section className={cn("relative overflow-hidden", glassCard)}>
+      <div className="relative z-10 flex flex-col gap-6 p-5 sm:p-6">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <Skeleton className="h-9 w-52" />
+            <Skeleton className="h-6 w-24 shrink-0 rounded-full" />
           </div>
-          <Skeleton className="h-4 w-56" />
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <dl className="grid gap-3">
-            {Array.from({ length: 4 }, (_, index) => (
-              <div key={index} className="flex justify-between gap-4">
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-            ))}
-          </dl>
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-8 w-44 rounded-full" />
+            <Skeleton className="h-8 w-28 rounded-full" />
+            <Skeleton className="h-8 w-24 rounded-full" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-10 w-32 rounded-xl" />
+            <Skeleton className="h-10 w-36 rounded-xl" />
+          </div>
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Skeleton className="h-10 w-full rounded-xl sm:flex-1" />
+            <Skeleton className="h-10 w-full rounded-xl sm:flex-1" />
+          </div>
+          <div className="flex flex-col gap-2 border-t border-white/40 pt-3 sm:flex-row dark:border-white/10">
+            <Skeleton className="h-10 w-full rounded-xl sm:flex-1" />
+            <Skeleton className="h-10 w-full rounded-xl sm:flex-1" />
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
 
 export default function TripDetailLoading() {
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-fixed">
+    <TripSceneBackgroundRoot tripType="leisure">
       <main
-        className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10"
+        className="relative mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10"
         aria-busy="true"
         aria-label="Loading trip"
       >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 rounded-3xl bg-gradient-to-t from-black/60 to-black/20"
+        />
         <TripDetailsSkeleton />
         <TripWeatherForecastSkeleton />
         <TripPackingListSkeleton />
       </main>
-    </div>
+    </TripSceneBackgroundRoot>
   );
 }

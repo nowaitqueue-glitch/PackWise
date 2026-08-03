@@ -7,7 +7,7 @@ import {
   handleCheckoutCompleted,
   handleInvoicePaid,
   handleSubscriptionChange,
-  isMutatingWebhookEvent,
+  releaseWebhookEvent,
 } from "@/lib/stripe-webhook";
 
 /**
@@ -23,19 +23,38 @@ import {
  *      optional STRIPE_PRICE_ID_SCAN_PACK
  *
  * Unlimited scans for Pro use profiles.is_pro (not a literal scans_month sentinel).
+ *
+ * Flow: verify signature → idempotency (event.id) check/insert → process.
  */
 export async function POST(request: Request) {
+  const signature = request.headers.get("stripe-signature");
+  if (!signature) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  const rawBody = await request.text();
+
   const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-
   if (!stripe || !webhookSecret) {
     return NextResponse.json(
       { error: "Stripe webhook is not configured." },
       { status: 500 }
     );
   }
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Invalid webhook signature.";
+    console.error("[stripe webhook] signature verification failed:", message);
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 
   if (!serviceRole || !supabaseUrl) {
     return NextResponse.json(
@@ -44,36 +63,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const signature = request.headers.get("stripe-signature");
-  if (!signature) {
-    return NextResponse.json({ error: "Missing signature." }, { status: 400 });
-  }
-
-  const rawBody = await request.text();
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Invalid webhook signature.";
-    console.error("[stripe webhook] signature verification failed:", message);
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-
   const admin = createClient(supabaseUrl, serviceRole, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // Primary key: event.id; fall back to request idempotency_key only if missing.
+  const idempotencyKey =
+    event.id?.trim() || event.request?.idempotency_key?.trim() || "";
+  if (!idempotencyKey) {
+    return NextResponse.json(
+      { error: "Missing webhook event id." },
+      { status: 400 }
+    );
+  }
+
+  let claimed = false;
   try {
-    // Idempotency for profile-mutating events: claim before any credits / Pro updates.
-    if (isMutatingWebhookEvent(event.type)) {
-      const fromRequest = event.request?.idempotency_key?.trim();
-      const idempotencyKey = fromRequest || event.id;
-      const claim = await claimWebhookEvent(admin, idempotencyKey);
-      if (claim === "duplicate") {
-        return NextResponse.json({ received: true });
-      }
+    const claim = await claimWebhookEvent(admin, idempotencyKey);
+    if (claim === "duplicate") {
+      return NextResponse.json({ received: true });
     }
+    claimed = true;
 
     switch (event.type) {
       case "checkout.session.completed": {
@@ -97,6 +107,9 @@ export async function POST(request: Request) {
         break;
     }
   } catch (error) {
+    if (claimed) {
+      await releaseWebhookEvent(admin, idempotencyKey);
+    }
     const message =
       error instanceof Error ? error.message : "Webhook handler failed.";
     console.error("[stripe webhook] handler error:", event.type, message);

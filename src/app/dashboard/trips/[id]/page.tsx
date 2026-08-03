@@ -12,6 +12,7 @@ import { getScanQuota } from "@/lib/pro";
 import { formatTripType } from "@/lib/trips";
 import { peekCachedTripWeatherCondition } from "@/lib/trip-weather-cache";
 import { TripSceneBackgroundRoot } from "@/components/trip-scene-background";
+import { DeleteTripButton } from "@/components/delete-trip-button";
 import { DuplicateTripButton } from "@/components/duplicate-trip-button";
 import { TripExportShare } from "@/components/trip-export-share";
 import { TripInviteDialog } from "@/components/trip-invite-dialog";
@@ -20,14 +21,20 @@ import { TripSuitcaseScan } from "@/components/trip-suitcase-scan";
 import { TripWeatherSection } from "@/components/trip-weather-section";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
 import { Button } from "@/components/ui/button";
-import { Pencil } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ArrowLeft,
+  CalendarRange,
+  Compass,
+  Pencil,
+  Plus,
+  Users,
+} from "lucide-react";
+import {
+  cn,
+  glassCard,
+  glassChip,
+  tripTitleClass,
+} from "@/lib/utils";
 
 type TripPageProps = {
   params: { id: string };
@@ -46,6 +53,17 @@ function formatDate(value: string): string {
   });
 }
 
+function formatShortDate(value: string): string {
+  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+const metaChipClass =
+  "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-foreground sm:text-sm";
+
 export default async function TripPage({ params, searchParams }: TripPageProps) {
   const { id } = params;
   const expectPendingPacking =
@@ -61,8 +79,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
   }
 
   // These queries are independent — run them in parallel to cut latency.
-  // Weather forecast stays in <Suspense>; only a cheap cache peek runs here
-  // for the initial scene image (no Open-Meteo on the critical path).
   const [
     { data: trip, error },
     { count: memberCount },
@@ -124,20 +140,32 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
 
   return (
     <TripSceneBackgroundRoot
-      tripId={trip.id}
       tripType={trip.trip_type}
       initialCondition={cachedCondition}
     >
       <main className="relative z-10 mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-10">
-        <section className="rounded-2xl border border-white/20 bg-white/30 text-foreground backdrop-blur-md dark:border-white/10 dark:bg-white/10">
-          <Card className="w-full border-0 bg-transparent shadow-none">
-            <CardHeader>
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <CardTitle className="font-bold text-2xl tracking-tight">
+        {/* Single content-column scrim — stronger at the bottom for packing text. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 rounded-3xl bg-gradient-to-t from-black/60 to-black/20"
+        />
+        {/* Hero summary keeps the only full glass surface on this page. */}
+        <section className={cn("relative overflow-hidden", glassCard)}>
+          <div className="relative z-10 flex flex-col gap-6 p-5 sm:p-6">
+            <header className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h1
+                  className={cn(tripTitleClass, "min-w-0 sm:text-3xl lg:text-4xl")}
+                >
                   {trip.destination}
-                </CardTitle>
+                </h1>
                 {isShared ? (
-                  <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  <span
+                    className={cn(
+                      "shrink-0 px-3 py-1 text-xs font-semibold text-foreground",
+                      glassChip
+                    )}
+                  >
                     Shared
                     {memberCount
                       ? ` · ${memberCount} member${memberCount === 1 ? "" : "s"}`
@@ -145,63 +173,106 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
                   </span>
                 ) : null}
               </div>
-              <CardDescription>
-                {formatTripType(trip.trip_type)} · {trip.travelers}{" "}
-                {trip.travelers === 1 ? "traveler" : "travelers"}
-                {!isOwner ? " · Shared with you" : null}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-6">
-              <dl className="grid gap-3 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Start</dt>
-                  <dd className="font-medium">{formatDate(trip.start_date)}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">End</dt>
-                  <dd className="font-medium">{formatDate(trip.end_date)}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Trip type</dt>
-                  <dd className="font-medium">{formatTripType(trip.trip_type)}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Travelers</dt>
-                  <dd className="font-medium">{trip.travelers}</dd>
-                </div>
-              </dl>
-              <div className="flex flex-col gap-2">
-                {isOwner ? <TripInviteDialog tripId={trip.id} /> : null}
-                {isOwner ? (
-                  <Button asChild variant="outline" className="w-full">
+
+              <ul className="flex flex-wrap items-center gap-2">
+                <li className={cn(metaChipClass, glassChip)}>
+                  <CalendarRange
+                    className="size-4 shrink-0 text-primary"
+                    aria-hidden
+                  />
+                  <span className="tabular-nums">
+                    <span className="sr-only">Dates: </span>
+                    <time dateTime={trip.start_date}>
+                      {formatShortDate(trip.start_date)}
+                    </time>
+                    {" – "}
+                    <time dateTime={trip.end_date}>
+                      {formatShortDate(trip.end_date)}
+                    </time>
+                  </span>
+                </li>
+                <li className={cn(metaChipClass, glassChip)}>
+                  <Compass className="size-4 shrink-0 text-primary" aria-hidden />
+                  <span>
+                    <span className="sr-only">Trip type: </span>
+                    {formatTripType(trip.trip_type)}
+                  </span>
+                </li>
+                <li className={cn(metaChipClass, glassChip)}>
+                  <Users className="size-4 shrink-0 text-primary" aria-hidden />
+                  <span className="tabular-nums">
+                    {trip.travelers}{" "}
+                    {trip.travelers === 1 ? "traveler" : "travelers"}
+                  </span>
+                </li>
+                {!isOwner ? (
+                  <li className={cn(metaChipClass, glassChip)}>Shared with you</li>
+                ) : null}
+              </ul>
+
+              <p className="sr-only">
+                {`Starts ${formatDate(trip.start_date)}, ends ${formatDate(trip.end_date)}.`}
+              </p>
+            </header>
+
+            <div className="flex flex-col gap-3">
+              {isOwner ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild variant="outline" className="flex-1 sm:flex-none">
                     <Link href={`/dashboard/trips/${trip.id}/edit`}>
-                      <Pencil className="size-4" />
+                      <Pencil aria-hidden />
                       Edit trip
                     </Link>
                   </Button>
-                ) : null}
+                  <DuplicateTripButton
+                    tripId={trip.id}
+                    variant="secondary"
+                    size="default"
+                    className="flex-1 sm:flex-none"
+                    label="Duplicate trip"
+                  />
+                  <DeleteTripButton
+                    tripId={trip.id}
+                    isOwner={isOwner}
+                    variant="outline"
+                    redirectTo="/dashboard"
+                  />
+                </div>
+              ) : (
                 <DuplicateTripButton
                   tripId={trip.id}
                   variant="secondary"
                   size="default"
-                  className="w-full"
+                  className="w-full sm:w-auto"
                   label="Duplicate trip"
                 />
-                <TripExportShare
-                  destination={trip.destination}
-                  startDate={trip.start_date}
-                  endDate={trip.end_date}
-                  items={exportItems}
-                />
-                <Button asChild className="w-full">
-                  <Link href="/dashboard/new-trip">Create another trip</Link>
+              )}
+
+              {isOwner ? <TripInviteDialog tripId={trip.id} /> : null}
+
+              <TripExportShare
+                destination={trip.destination}
+                startDate={trip.start_date}
+                endDate={trip.end_date}
+                items={exportItems}
+              />
+
+              <div className="flex flex-col gap-2 border-t border-white/40 pt-3 sm:flex-row dark:border-white/10">
+                <Button asChild className="w-full sm:flex-1">
+                  <Link href="/dashboard/new-trip">
+                    <Plus aria-hidden />
+                    Create another trip
+                  </Link>
                 </Button>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href="/dashboard">Back to dashboard</Link>
+                <Button asChild variant="ghost" className="w-full sm:flex-1">
+                  <Link href="/dashboard">
+                    <ArrowLeft aria-hidden />
+                    Back to dashboard
+                  </Link>
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </section>
 
         <Suspense fallback={<TripWeatherForecastSkeleton />}>
@@ -216,6 +287,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           tripId={trip.id}
           isPro={scanQuota.isPro}
           scansRemaining={scanQuota.scansRemaining}
+          canEdit={isOwner}
         />
 
         <TripPackingListSection

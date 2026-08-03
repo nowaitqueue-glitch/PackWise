@@ -33,9 +33,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  const pathname = request.nextUrl.pathname;
+  // Guest flows stay public: /guest/* is never under /dashboard, and
+  // /dashboard/guest is explicitly allowlisted below for unauthenticated users.
+  const isGuestDashboard =
+    pathname === "/dashboard/guest" || pathname.startsWith("/dashboard/guest/");
+
+  if (
+    !user &&
+    pathname.startsWith("/dashboard") &&
+    !isGuestDashboard
+  ) {
     const url = request.nextUrl.clone();
-    const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+    const nextPath = `${pathname}${request.nextUrl.search}`;
     url.pathname = "/login";
     url.search = "";
     url.searchParams.set("next", nextPath);

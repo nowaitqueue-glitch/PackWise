@@ -53,6 +53,11 @@ export type WeatherForecastResult = {
   lon?: number;
 };
 
+/** Result shape shared by weather UI (client) and server actions. */
+export type WeatherResultState =
+  | { ok: true; data: WeatherForecastResult }
+  | { ok: false; error: string; code?: string };
+
 export class WeatherError extends Error {
   constructor(
     message: string,

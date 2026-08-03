@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { Download, ExternalLink, Loader2 } from "lucide-react";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import { Button } from "@/components/ui/button";
-import { DeleteAccountButton } from "./delete-account-button";
+import { cn, glassChip } from "@/lib/utils";
 import { downloadMyData } from "./settings-actions";
 
 export function SettingsPrivacy() {
@@ -12,16 +12,20 @@ export function SettingsPrivacy() {
   const [isDownloading, startDownload] = useTransition();
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-foreground">Download my data</p>
-        <p className="text-sm text-muted-foreground">
-          Export your trips and packing lists as a JSON file.
-        </p>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-foreground">
+            Download my data
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Export your trips and packing lists as a JSON file.
+          </p>
+        </div>
         <Button
           type="button"
-          variant="outline"
-          className="w-fit"
+          variant="secondary"
+          className="w-full shrink-0 sm:w-auto"
           disabled={isDownloading}
           onClick={() => {
             startDownload(async () => {
@@ -48,20 +52,23 @@ export function SettingsPrivacy() {
           }}
         >
           {isDownloading ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-4 animate-spin" aria-hidden />
           ) : (
-            <Download className="size-4" />
+            <Download className="size-4" aria-hidden />
           )}
           Download JSON
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-3 text-sm">
+      <div className="flex flex-wrap gap-2 border-t border-slate-900/5 pt-5 dark:border-white/10">
         <a
           href="/privacy"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          className={cn(
+            glassChip,
+            "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground hover:shadow-sm"
+          )}
         >
           Privacy Policy
           <ExternalLink className="size-3.5" aria-hidden />
@@ -70,22 +77,14 @@ export function SettingsPrivacy() {
           href="/terms"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          className={cn(
+            glassChip,
+            "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-all hover:text-foreground hover:shadow-sm"
+          )}
         >
           Terms of Service
           <ExternalLink className="size-3.5" aria-hidden />
         </a>
-      </div>
-
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4">
-        <p className="text-sm font-medium text-destructive">Delete account</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Permanently remove your account, trips, packing lists, and related
-          data. This cannot be undone.
-        </p>
-        <div className="mt-3">
-          <DeleteAccountButton />
-        </div>
       </div>
     </div>
   );
