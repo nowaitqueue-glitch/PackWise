@@ -67,10 +67,12 @@ const LANDING_STYLES = `
 .landing-scrim {
   position: absolute;
   inset: 0;
+  /* Keep the top open so sticky header chrome sits on the sky, not a white wash. */
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(255, 255, 255, 0.55) 35%,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.28) 18%,
+    rgba(255, 255, 255, 0.55) 42%,
     rgba(255, 255, 255, 0.82) 70%,
     hsl(var(--background) / 0.95) 100%
   );
@@ -78,9 +80,10 @@ const LANDING_STYLES = `
 .dark .landing-scrim {
   background: linear-gradient(
     to bottom,
-    hsl(var(--background) / 0.6) 0%,
-    hsl(var(--background) / 0.5) 40%,
-    hsl(var(--background) / 0.8) 75%,
+    hsl(var(--background) / 0.25) 0%,
+    hsl(var(--background) / 0.4) 28%,
+    hsl(var(--background) / 0.65) 55%,
+    hsl(var(--background) / 0.85) 78%,
     hsl(var(--background) / 0.98) 100%
   );
 }

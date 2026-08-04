@@ -11,7 +11,6 @@ import {
   cn,
   glassCard,
   glassCardHover,
-  glassHeader,
   iconTileClass,
   sectionTitleClass,
   travelGradientText,
@@ -61,19 +60,32 @@ export default async function HomePage({
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <header className={cn("sticky top-0 z-40", glassHeader)}>
+        {/* Full-bleed hero plane behind sticky header + first viewport */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[min(100vh,56rem)] overflow-hidden"
+        >
+          <LandingBackground className="absolute inset-0" />
+        </div>
+
+        <header className="sticky top-0 z-40 border-b border-white/20 bg-transparent backdrop-blur-sm dark:border-white/10 dark:bg-black/10">
           <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
-            <BrandLogo href="/" />
+            <BrandLogo href="/" variant="light" />
             <div className="flex items-center gap-1 sm:gap-2">
-              <ThemeToggle />
+              <ThemeToggle variant="light" />
               {user ? (
-                <Button asChild size="sm">
+                <Button
+                  asChild
+                  size="sm"
+                  variant="outline"
+                  className="border-white/30 bg-transparent text-white shadow-sm hover:bg-white/10 hover:text-white"
+                >
                   <Link href="/dashboard">Go to dashboard</Link>
                 </Button>
               ) : (
                 <Link
                   href="/login"
-                  className="px-2 text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  className="rounded-md border border-white/30 px-3 py-1.5 text-sm text-white shadow-sm transition-colors hover:bg-white/10"
                 >
                   Log in
                 </Link>
@@ -82,9 +94,7 @@ export default async function HomePage({
           </div>
         </header>
 
-        <div className="relative overflow-hidden">
-          <LandingBackground />
-
+        <div className="relative">
           <section className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col justify-center px-4 pb-16 pt-12 sm:px-6 sm:pb-24 sm:pt-16">
             {accountDeleted ? (
               <div
@@ -160,11 +170,11 @@ export default async function HomePage({
                         <p className="text-sm leading-relaxed text-muted-foreground">
                           {feature.description}
                         </p>
-                        {"plannedLabel" in feature ? (
-                          <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+                          {"plannedLabel" in feature ? (
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
                             <span>{feature.plannedLabel}</span>
                             <Badge variant="secondary">Coming soon</Badge>
-                          </p>
+                          </div>
                         ) : null}
                       </div>
                     </div>

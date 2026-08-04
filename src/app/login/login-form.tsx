@@ -54,6 +54,9 @@ const dividerLabelClass = cn(
   "px-3 py-0.5 text-xs uppercase tracking-wide text-muted-foreground"
 );
 
+const mutedLinkClass =
+  "rounded-md text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline dark:text-slate-300 dark:hover:text-white";
+
 export function LoginForm({
   nextPath = "/dashboard",
   claimGuest = false,
@@ -284,10 +287,10 @@ export function LoginForm({
           <div className={iconTileClass} aria-hidden>
             <Briefcase className="size-7" />
           </div>
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-2xl text-card-foreground">
             {fromSignup ? "Welcome to PackWise" : "Sign in to PackWise"}
           </CardTitle>
-          <CardDescription className="leading-relaxed">
+          <CardDescription className="leading-relaxed text-muted-foreground dark:text-slate-300">
             New here? Enter your email — we&apos;ll create your account when you
             open the magic link.
           </CardDescription>
@@ -345,7 +348,7 @@ export function LoginForm({
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-white/50 dark:border-white/10" />
+              <span className="w-full border-t border-slate-900/10 dark:border-white/15" />
             </div>
             <div className="relative flex justify-center">
               <span className={dividerLabelClass}>or</span>
@@ -361,7 +364,7 @@ export function LoginForm({
           <div className="flex flex-col gap-3">
             <button
               type="button"
-              className="mx-auto rounded-md text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              className={cn(mutedLinkClass, "mx-auto")}
               aria-expanded={passwordExpanded}
               aria-controls="password-sign-in"
               onClick={() => setPasswordExpanded((open) => !open)}
@@ -394,7 +397,10 @@ export function LoginForm({
                       <Label htmlFor="password">Password</Label>
                       <button
                         type="button"
-                        className="rounded-md text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
+                        className={cn(
+                          mutedLinkClass,
+                          "text-xs disabled:opacity-50"
+                        )}
                         disabled={busy || !passwordExpanded}
                         aria-label="Forgot password"
                         onClick={() => void handleForgotPassword()}
@@ -428,7 +434,6 @@ export function LoginForm({
                   ) : null}
                   <Button
                     type="submit"
-                    variant="outline"
                     size="lg"
                     className="w-full"
                     disabled={busy || !passwordExpanded}
@@ -457,10 +462,10 @@ export function LoginForm({
 
 function HomeLink() {
   return (
-    <p className="text-center text-sm text-muted-foreground">
+    <p className="text-center text-sm text-muted-foreground dark:text-slate-300">
       <Link
         href="/"
-        className="underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        className="underline-offset-4 transition-colors hover:text-foreground hover:underline dark:hover:text-white"
         aria-label="Go back to home"
       >
         Go back to home

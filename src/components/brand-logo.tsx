@@ -5,23 +5,36 @@ import { cn, travelGradientText } from "@/lib/utils";
 type BrandLogoProps = {
   href?: string | null;
   className?: string;
+  /** `light` = white wordmark for dark/gradient surfaces; default `dark` for solid pages. */
+  variant?: "light" | "dark";
 };
 
-export function BrandLogo({ href = "/", className }: BrandLogoProps) {
+export function BrandLogo({
+  href = "/",
+  className,
+  variant = "dark",
+}: BrandLogoProps) {
+  const isLight = variant === "light";
+
   const content = (
     <>
       <Image
-        src="/images/logo.png"
+        src="/images/brand-logo.png"
         alt={href ? "PackWise home" : "PackWise"}
         width={40}
         height={40}
-        className="h-10 w-auto"
+        className={cn(
+          "h-10 w-10 object-contain",
+          isLight && "drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]"
+        )}
         priority
       />
       <span
         className={cn(
           "text-base font-bold tracking-tight sm:text-lg",
-          travelGradientText
+          isLight
+            ? "text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
+            : travelGradientText
         )}
       >
         PackWise

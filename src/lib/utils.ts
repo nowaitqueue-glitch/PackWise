@@ -10,7 +10,7 @@ export function cn(...inputs: ClassValue[]) {
  * Dark mode swaps to a translucent navy so text keeps its contrast.
  */
 export const glassCard =
-  "bg-white/70 backdrop-blur-md border border-white/30 rounded-2xl shadow-lg dark:bg-slate-900/60 dark:border-white/10"
+  "bg-white/70 backdrop-blur-md border border-white/30 rounded-2xl shadow-lg dark:bg-slate-950/85 dark:border-white/10"
 export const glassCardHover =
   "hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300"
 export const glassContentOverlay =
@@ -41,7 +41,7 @@ export const travelGradientText = "text-travel-gradient"
 
 /** Shared field styling — mirrors ui/input + ui/select so bespoke triggers match. */
 export const fieldClass =
-  "w-full rounded-xl border border-gray-200 bg-white/60 px-4 py-3 text-base shadow-sm outline-none backdrop-blur-sm transition-all placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-slate-900/50"
+  "w-full rounded-xl border border-gray-200 bg-white/60 px-4 py-3 text-base text-foreground shadow-sm outline-none backdrop-blur-sm transition-all placeholder:text-muted-foreground focus:border-transparent focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15 dark:bg-slate-950/55 dark:text-foreground"
 
 /** Icon inside destructive / delete icon buttons. */
 export const deleteButtonIconClass =

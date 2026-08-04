@@ -10,16 +10,16 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-travel-gradient text-white shadow-md hover:shadow-lg hover:brightness-[1.06]",
+          "bg-brand-from bg-travel-gradient text-white shadow-md hover:shadow-lg hover:brightness-[1.06] dark:text-white",
         destructive:
           "bg-destructive text-destructive-foreground shadow-md hover:shadow-lg hover:bg-destructive/90",
         /** Subtle icon-only delete affordance (pairs with deleteButtonIconClass). */
         destructiveGhost:
           "text-muted-foreground hover:bg-red-500/10 hover:text-red-500 dark:hover:text-red-400",
         outline:
-          "border border-gray-200 bg-white/50 text-foreground shadow-sm backdrop-blur-sm hover:bg-white/80 hover:shadow dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10",
+          "border border-gray-200 bg-white/50 text-foreground shadow-sm backdrop-blur-sm hover:bg-white/80 hover:shadow dark:border-white/20 dark:bg-white/10 dark:hover:bg-white/15",
         secondary:
-          "border border-gray-200 bg-white/70 text-foreground shadow-sm backdrop-blur-sm hover:bg-white/90 hover:shadow dark:border-white/15 dark:bg-white/10 dark:hover:bg-white/15",
+          "border border-gray-200 bg-white/70 text-foreground shadow-sm backdrop-blur-sm hover:bg-white/90 hover:shadow dark:border-white/20 dark:bg-slate-800/80 dark:hover:bg-slate-800",
         ghost:
           "text-foreground hover:bg-white/60 hover:shadow-sm dark:hover:bg-white/10",
         link: "text-primary underline-offset-4 hover:underline",
