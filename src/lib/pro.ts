@@ -208,8 +208,9 @@ export async function getScanQuota(
 }
 
 /**
- * Decrements free-tier scans_remaining after a successful scan via
- * consume_scan_credit SECURITY DEFINER RPC. No-op for Pro users.
+ * Atomically decrements free-tier scans_remaining via consume_scan_credit
+ * (row lock + conditional decrement). Call BEFORE Gemini so concurrent
+ * requests cannot exceed quota. No-op for Pro users.
  */
 export async function consumeScanCredit(
   userId: string,
@@ -235,6 +236,46 @@ export async function consumeScanCredit(
         typeof payload.error === "string"
           ? payload.error
           : "No suitcase scans remaining this month.",
+    };
+  }
+
+  const remaining =
+    typeof payload.scans_remaining === "number"
+      ? payload.scans_remaining
+      : 0;
+
+  return { ok: true, scansRemaining: remaining };
+}
+
+/**
+ * Restores one free-tier scan credit after a failed analysis (Gemini / upload).
+ * Uses refund_scan_credit SECURITY DEFINER RPC. No-op for Pro users.
+ */
+export async function refundScanCredit(
+  userId: string,
+  supabaseClient?: SupabaseClient
+): Promise<{ ok: true; scansRemaining: number } | { ok: false; error: string }> {
+  const supabase = supabaseClient ?? (await createClient());
+
+  if (await userHasProAccessForUser(userId, supabase)) {
+    return { ok: true, scansRemaining: FREE_MONTHLY_SCANS };
+  }
+
+  const { data, error } = await supabase.rpc("refund_scan_credit");
+
+  if (error) {
+    console.error("refund_scan_credit failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+
+  const payload = (data ?? {}) as ConsumeScanCreditRpc;
+  if (payload.ok !== true) {
+    return {
+      ok: false,
+      error:
+        typeof payload.error === "string"
+          ? payload.error
+          : "Could not refund scan credit.",
     };
   }
 

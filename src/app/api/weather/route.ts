@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getClientIp } from "@/lib/client-ip";
 import { createBearerClient } from "@/lib/supabase/bearer";
 import { createClient } from "@/lib/supabase/server";
 import { getWeatherForecast, WeatherError } from "@/lib/weather";
@@ -30,13 +31,22 @@ function checkRateLimit(
   return { allowed: true };
 }
 
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+/**
+ * Enforce IP always; when authenticated, also enforce per-user so one account
+ * cannot burn quota across devices / rotating IPs.
+ */
+function enforceRateLimits(
+  request: NextRequest,
+  userId: string | null
+): { allowed: true } | { allowed: false; retryAfterSec: number } {
+  const keys = [`ip:${getClientIp(request)}`];
+  if (userId) keys.push(`user:${userId}`);
+
+  for (const key of keys) {
+    const result = checkRateLimit(key);
+    if (!result.allowed) return result;
   }
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
+  return { allowed: true };
 }
 
 function rateLimitExceeded(retryAfterSec: number) {
@@ -82,17 +92,17 @@ async function getAuthenticatedUser(request: NextRequest) {
  * GET /api/weather?destination=Paris&startDate=2026-07-20&endDate=2026-07-24
  *
  * Cookie session, Authorization Bearer, or unauthenticated guest callers.
- * Rate-limited to 30 requests/minute per authenticated user id, or per IP
- * for guests. Dashboard weather-actions call getWeatherForecast /
- * resolveTripWeatherForecast directly and bypass this route entirely.
+ * Rate-limited to 30 requests/minute per IP, and also per authenticated user
+ * id when available (both buckets must allow). Dashboard weather-actions call
+ * getWeatherForecast / resolveTripWeatherForecast directly and bypass this
+ * route entirely.
  *
  * Server-only: Open-Meteo forecast with static climate fallback for every trip day.
  * No API key required.
  */
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
-  const rateKey = user ? `user:${user.id}` : `ip:${clientIp(request)}`;
-  const limit = checkRateLimit(rateKey);
+  const limit = enforceRateLimits(request, user?.id ?? null);
   if (!limit.allowed) {
     return rateLimitExceeded(limit.retryAfterSec);
   }

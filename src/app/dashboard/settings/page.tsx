@@ -1,4 +1,6 @@
+import Link from "next/link";
 import {
+  ArrowLeft,
   Bell,
   KeyRound,
   LogOut,
@@ -10,6 +12,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/components/LogoutButton";
+import { Button } from "@/components/ui/button";
 import { cn, glassCard, pageTitleClass, sectionTitleClass } from "@/lib/utils";
 import { DeleteAccountButton } from "./delete-account-button";
 import { SettingsAccount, SettingsPassword } from "./settings-account";
@@ -89,11 +92,24 @@ export default async function SettingsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:py-12">
-      <header className="mb-8 sm:mb-10">
-        <h1 className={pageTitleClass}>Settings</h1>
-        <p className="mt-2 text-base text-muted-foreground">
-          Manage your PackWise account, notifications, and privacy.
-        </p>
+      <header className="mb-8 flex flex-col gap-4 sm:mb-10">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="-ml-2 w-fit text-muted-foreground"
+        >
+          <Link href="/dashboard">
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Back to dashboard
+          </Link>
+        </Button>
+        <div>
+          <h1 className={pageTitleClass}>Settings</h1>
+          <p className="mt-2 text-base text-muted-foreground">
+            Manage your PackWise account, notifications, and privacy.
+          </p>
+        </div>
       </header>
 
       <div className="space-y-6">
@@ -108,7 +124,7 @@ export default async function SettingsPage() {
         <SettingsSection
           icon={KeyRound}
           title="Password"
-          description="Update the password you use to sign in."
+          description="Set or update the password you use to sign in."
         >
           <SettingsPassword email={email} />
         </SettingsSection>

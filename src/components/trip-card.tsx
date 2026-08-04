@@ -64,6 +64,8 @@ type TripCardProps = {
   completed?: boolean;
   /** First card only — anchors for the one-time dashboard tour. */
   onboardingAnchors?: boolean;
+  /** Suspense/streaming: show chip skeletons while weather/packing resolve. */
+  chipsPending?: boolean;
 };
 
 export function TripCard({
@@ -72,6 +74,7 @@ export function TripCard({
   packing = null,
   completed = false,
   onboardingAnchors = false,
+  chipsPending = false,
 }: TripCardProps) {
   const showPacking = packing != null && packing.total > 0;
 
@@ -143,6 +146,11 @@ export function TripCard({
                   {weather.condition}
                 </span>
               </span>
+            ) : chipsPending ? (
+              <span
+                aria-hidden
+                className="h-4 w-16 animate-pulse rounded bg-slate-900/10 dark:bg-white/10"
+              />
             ) : null}
           </div>
         </div>
@@ -175,6 +183,11 @@ export function TripCard({
               {packing.packed}/{packing.total} packed
             </p>
           </div>
+        ) : chipsPending ? (
+          <span
+            aria-hidden
+            className="mt-1 h-4 w-16 animate-pulse rounded bg-slate-900/10 dark:bg-white/10"
+          />
         ) : null}
       </CardContent>
       <CardFooter className="relative z-[1] flex flex-wrap gap-2 p-5 pt-0">

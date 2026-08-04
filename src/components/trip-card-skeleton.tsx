@@ -20,8 +20,10 @@ export function TripCardSkeleton() {
         <div className="flex items-start justify-between gap-2">
           <Skeleton className="h-8 w-3/5 rounded-lg" />
           <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-6 w-24 rounded-full" />
+            <span
+              aria-hidden
+              className="h-4 w-16 animate-pulse rounded bg-slate-900/10 dark:bg-white/10"
+            />
           </div>
         </div>
         <Skeleton className="h-4 w-28 rounded-lg" />
@@ -29,6 +31,10 @@ export function TripCardSkeleton() {
       <CardContent className="relative z-10 flex flex-1 flex-col gap-2 p-5 pt-0">
         <Skeleton className="h-4 w-4/5 rounded-lg" />
         <Skeleton className="h-4 w-2/5 rounded-lg" />
+        <span
+          aria-hidden
+          className="mt-1 h-4 w-16 animate-pulse rounded bg-slate-900/10 dark:bg-white/10"
+        />
       </CardContent>
       <CardFooter className="relative z-10 flex flex-wrap gap-2 p-5 pt-0">
         <Skeleton className="h-9 w-32 rounded-lg" />

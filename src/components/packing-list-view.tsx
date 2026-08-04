@@ -31,10 +31,10 @@ import {
 import {
   cn,
   deleteButtonIconClass,
-  glassCard,
   glassCardHover,
   glassChip,
   sectionTitleClass,
+  solidContentCard,
 } from "@/lib/utils";
 
 export type CustomFormState = {
@@ -138,7 +138,7 @@ function firePackingConfetti(): void {
   });
 }
 
-/** Shared glass panel used by the header, each category, and the add form. */
+/** Shared solid panel used by the header, each category, and the add form. */
 function PackingPanel({
   className,
   pattern = false,
@@ -149,7 +149,9 @@ function PackingPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("relative overflow-hidden", glassCard, className)}>
+    <section
+      className={cn("relative overflow-hidden", solidContentCard, className)}
+    >
       {pattern ? (
         <div
           aria-hidden
@@ -530,7 +532,7 @@ export function PackingListView({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="size-9 text-muted-foreground"
+                              className="min-h-11 min-w-11 p-2 text-muted-foreground"
                               onClick={() => onStartEdit?.(item)}
                               disabled={busy}
                               aria-label={`Edit ${item.name}`}
@@ -542,7 +544,7 @@ export function PackingListView({
                               type="button"
                               variant="destructiveGhost"
                               size="icon"
-                              className="group size-9"
+                              className="group min-h-11 min-w-11 p-2"
                               onClick={() => onDeleteCustom?.(item)}
                               disabled={busy}
                               aria-label={`Delete ${item.name}`}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { KeyRound, Loader2, Mail } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,24 @@ import { createClient } from "@/lib/supabase/client";
 type SettingsAccountProps = {
   email: string;
 };
+
+/**
+ * Detect password availability without dummy sign-in attempts.
+ * Email identities cover both magic-link and password auth, so we rely on
+ * `user_metadata.has_password` (set after set/change/reset password, or
+ * password sign-in). Identities/providers confirm the user can authenticate.
+ */
+function userHasPassword(user: User | null): boolean {
+  if (!user || user.user_metadata?.has_password !== true) return false;
+
+  const providers = Array.isArray(user.app_metadata?.providers)
+    ? (user.app_metadata.providers as unknown[]).filter(
+        (p): p is string => typeof p === "string"
+      )
+    : [];
+  const identities = user.identities ?? [];
+  return providers.length > 0 || identities.length > 0;
+}
 
 export function SettingsAccount({ email }: SettingsAccountProps) {
   return (
@@ -45,19 +64,48 @@ export function SettingsAccount({ email }: SettingsAccountProps) {
 }
 
 export function SettingsPassword({ email }: SettingsAccountProps) {
+  // Default to "set" UX (magic-link primary); upgrade after user lookup.
+  const [hasPassword, setHasPassword] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      setHasPassword(userHasPassword(data.user));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Passwords must be at least 8 characters.
+        {hasPassword
+          ? "Passwords must be at least 8 characters."
+          : "Magic-link accounts can set a password for faster sign-in next time. Passwords must be at least 8 characters."}
       </p>
       <div className="flex flex-wrap gap-2">
-        <ChangePasswordDialog email={email} />
+        <ChangePasswordDialog
+          email={email}
+          hasPassword={hasPassword}
+          onPasswordSet={() => setHasPassword(true)}
+        />
       </div>
     </div>
   );
 }
 
-function ChangePasswordDialog({ email }: { email: string }) {
+function ChangePasswordDialog({
+  email,
+  hasPassword,
+  onPasswordSet,
+}: {
+  email: string;
+  hasPassword: boolean;
+  onPasswordSet: () => void;
+}) {
   const { showBanner } = usePillBanner();
   const [open, setOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
@@ -71,6 +119,10 @@ function ChangePasswordDialog({ email }: { email: string }) {
     setConfirmPassword("");
   }
 
+  const canSubmit = hasPassword
+    ? Boolean(oldPassword && newPassword && newPassword === confirmPassword)
+    : Boolean(newPassword && newPassword === confirmPassword);
+
   return (
     <Dialog
       open={open}
@@ -83,30 +135,38 @@ function ChangePasswordDialog({ email }: { email: string }) {
       <DialogTrigger asChild>
         <Button type="button" variant="secondary">
           <KeyRound aria-hidden />
-          Change password
+          {hasPassword ? "Change password" : "Set a password"}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Change password</DialogTitle>
+          <DialogTitle>
+            {hasPassword ? "Change password" : "Set a password"}
+          </DialogTitle>
           <DialogDescription>
-            Confirm your current password, then choose a new one.
+            {hasPassword
+              ? "Confirm your current password, then choose a new one."
+              : "Choose a password so you can sign in without a magic link."}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">
+          {hasPassword ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="old-password">Current password</Label>
+              <Input
+                id="old-password"
+                type="password"
+                autoComplete="current-password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                disabled={isPending}
+              />
+            </div>
+          ) : null}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="old-password">Current password</Label>
-            <Input
-              id="old-password"
-              type="password"
-              autoComplete="current-password"
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              disabled={isPending}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="new-password">New password</Label>
+            <Label htmlFor="new-password">
+              {hasPassword ? "New password" : "Password"}
+            </Label>
             <Input
               id="new-password"
               type="password"
@@ -117,7 +177,9 @@ function ChangePasswordDialog({ email }: { email: string }) {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="confirm-password">Confirm new password</Label>
+            <Label htmlFor="confirm-password">
+              {hasPassword ? "Confirm new password" : "Confirm password"}
+            </Label>
             <Input
               id="confirm-password"
               type="password"
@@ -139,12 +201,7 @@ function ChangePasswordDialog({ email }: { email: string }) {
           </Button>
           <Button
             type="button"
-            disabled={
-              isPending ||
-              !oldPassword ||
-              !newPassword ||
-              newPassword !== confirmPassword
-            }
+            disabled={isPending || !canSubmit}
             onClick={() => {
               startTransition(async () => {
                 if (newPassword.length < 8) {
@@ -163,22 +220,26 @@ function ChangePasswordDialog({ email }: { email: string }) {
                 }
 
                 const supabase = createClient();
-                const { error: verifyError } =
-                  await supabase.auth.signInWithPassword({
-                    email,
-                    password: oldPassword,
-                  });
 
-                if (verifyError) {
-                  showBanner({
-                    message: "Current password is incorrect.",
-                    variant: "error",
-                  });
-                  return;
+                if (hasPassword) {
+                  const { error: verifyError } =
+                    await supabase.auth.signInWithPassword({
+                      email,
+                      password: oldPassword,
+                    });
+
+                  if (verifyError) {
+                    showBanner({
+                      message: "Current password is incorrect.",
+                      variant: "error",
+                    });
+                    return;
+                  }
                 }
 
                 const { error: updateError } = await supabase.auth.updateUser({
                   password: newPassword,
+                  data: { has_password: true },
                 });
 
                 if (updateError) {
@@ -190,9 +251,12 @@ function ChangePasswordDialog({ email }: { email: string }) {
                 }
 
                 showBanner({
-                  message: "Password updated.",
+                  message: hasPassword
+                    ? "Password updated."
+                    : "Password set. You can sign in with email and password next time.",
                   variant: "success",
                 });
+                onPasswordSet();
                 setOpen(false);
                 reset();
               });
@@ -203,8 +267,10 @@ function ChangePasswordDialog({ email }: { email: string }) {
                 <Loader2 className="size-4 animate-spin" />
                 Saving…
               </>
-            ) : (
+            ) : hasPassword ? (
               "Update password"
+            ) : (
+              "Set password"
             )}
           </Button>
         </DialogFooter>

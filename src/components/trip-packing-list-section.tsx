@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { TripPackingList } from "@/components/trip-packing-list";
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
 import {
   parsePackingItems,
@@ -12,6 +12,16 @@ import {
   type PackingListSource,
 } from "@/lib/packing";
 import { cn, glassChip } from "@/lib/utils";
+
+const TripPackingList = dynamic(
+  () =>
+    import("@/components/trip-packing-list").then((m) => ({
+      default: m.TripPackingList,
+    })),
+  {
+    loading: () => <TripPackingListSkeleton />,
+  }
+);
 
 const POLL_INTERVAL_MS = 1_500;
 const POLL_TIMEOUT_MS = 45_000;

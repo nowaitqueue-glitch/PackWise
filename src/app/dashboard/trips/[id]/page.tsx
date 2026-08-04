@@ -17,7 +17,7 @@ import { DuplicateTripButton } from "@/components/duplicate-trip-button";
 import { TripExportShare } from "@/components/trip-export-share";
 import { TripInviteDialog } from "@/components/trip-invite-dialog";
 import { TripPackingListSection } from "@/components/trip-packing-list-section";
-import { TripSuitcaseScan } from "@/components/trip-suitcase-scan";
+import { TripSuitcaseScan } from "@/components/trip-suitcase-scan-lazy";
 import { TripWeatherSection } from "@/components/trip-weather-section";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
 import { Button } from "@/components/ui/button";
@@ -283,13 +283,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           />
         </Suspense>
 
-        <TripSuitcaseScan
-          tripId={trip.id}
-          isPro={scanQuota.isPro}
-          scansRemaining={scanQuota.scansRemaining}
-          canEdit={isOwner}
-        />
-
         <TripPackingListSection
           tripId={trip.id}
           initialItems={packingItems}
@@ -298,6 +291,17 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           canEdit={isOwner}
           listSource={listSource}
           expectPending={expectPendingPacking && packingItems.length === 0}
+        />
+
+        <TripSuitcaseScan
+          tripId={trip.id}
+          isPro={scanQuota.isPro}
+          scansRemaining={scanQuota.scansRemaining}
+          canEdit={isOwner}
+          packedCount={
+            packingItems.filter((item) => item.packed).length +
+            customItems.filter((item) => item.packed).length
+          }
         />
       </main>
     </TripSceneBackgroundRoot>

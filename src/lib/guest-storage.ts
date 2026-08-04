@@ -2,9 +2,14 @@ import type { PackingItem } from "@/lib/packing";
 
 export const GUEST_TRIP_KEY = "guest_trip";
 export const GUEST_PACKED_ITEMS_KEY = "guest_packed_items";
+export const GUEST_PACKING_ITEMS_KEY = "guest_packing_items";
+/** Guest-only custom packing items (transferred to packing_custom_items on claim). */
+export const GUEST_CUSTOM_ITEMS_KEY = "guest_custom_items";
 export const GUEST_CHECKOFF_COUNT_KEY = "guest_checkoff_count";
 export const GUEST_CTA_DISMISSED_KEY = "guest_cta_dismissed";
 export const GUEST_LOCKED_DISMISSED_KEY = "guest_locked_dismissed";
+/** sessionStorage snapshot used during claim so a rebuild failure can restore. */
+export const CLAIM_PACKING_SNAPSHOT_KEY = "packwise-claim-packing-snapshot";
 
 /** Legacy key from the earlier `/guest` flow — migrated on read. */
 const LEGACY_GUEST_STORAGE_KEY = "packwise-guest-trip";
@@ -124,11 +129,162 @@ export function clearGuestTrip(): void {
   try {
     localStorage.removeItem(GUEST_TRIP_KEY);
     localStorage.removeItem(GUEST_PACKED_ITEMS_KEY);
+    localStorage.removeItem(GUEST_PACKING_ITEMS_KEY);
+    localStorage.removeItem(GUEST_CUSTOM_ITEMS_KEY);
     localStorage.removeItem(GUEST_CHECKOFF_COUNT_KEY);
     localStorage.removeItem(LEGACY_GUEST_STORAGE_KEY);
   } catch {
     // Ignore storage failures.
   }
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem(CLAIM_PACKING_SNAPSHOT_KEY);
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function isPackingItemArray(value: unknown): value is PackingItem[] {
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      typeof (item as PackingItem).name === "string" &&
+      (item as PackingItem).name.trim().length > 0 &&
+      typeof (item as PackingItem).category === "string"
+  );
+}
+
+export function readGuestPackingItems(): PackingItem[] {
+  if (!canUseStorage()) return [];
+  try {
+    const raw = localStorage.getItem(GUEST_PACKING_ITEMS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return isPackingItemArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeGuestPackingItems(items: PackingItem[]): void {
+  if (!canUseStorage()) return;
+  try {
+    if (items.length === 0) {
+      localStorage.removeItem(GUEST_PACKING_ITEMS_KEY);
+      return;
+    }
+    localStorage.setItem(GUEST_PACKING_ITEMS_KEY, JSON.stringify(items));
+  } catch {
+    // Quota / private mode — ignore.
+  }
+}
+
+function normalizeGuestCustomItems(items: PackingItem[]): PackingItem[] {
+  return items
+    .filter(
+      (item) =>
+        item &&
+        typeof item.name === "string" &&
+        item.name.trim().length > 0 &&
+        typeof item.category === "string"
+    )
+    .map((item) => ({
+      id:
+        typeof item.id === "string" && item.id.trim()
+          ? item.id.trim()
+          : crypto.randomUUID(),
+      name: item.name.trim(),
+      category: item.category.trim() || "Other",
+      notes: typeof item.notes === "string" ? item.notes : "",
+      packed: item.packed === true,
+      isCustom: true as const,
+    }));
+}
+
+export function readGuestCustomItems(): PackingItem[] {
+  if (!canUseStorage()) return [];
+  try {
+    const raw = localStorage.getItem(GUEST_CUSTOM_ITEMS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return normalizeGuestCustomItems(parsed as PackingItem[]);
+  } catch {
+    return [];
+  }
+}
+
+export function writeGuestCustomItems(items: PackingItem[]): void {
+  if (!canUseStorage()) return;
+  try {
+    const normalized = normalizeGuestCustomItems(items);
+    if (normalized.length === 0) {
+      localStorage.removeItem(GUEST_CUSTOM_ITEMS_KEY);
+      return;
+    }
+    localStorage.setItem(GUEST_CUSTOM_ITEMS_KEY, JSON.stringify(normalized));
+  } catch {
+    // Quota / private mode — ignore.
+  }
+}
+
+/** Snapshot packing into sessionStorage before claim rebuild (safe restore). */
+export function snapshotClaimPackingItems(items: PackingItem[]): void {
+  if (typeof window === "undefined" || typeof sessionStorage === "undefined") {
+    return;
+  }
+  try {
+    if (items.length === 0) {
+      sessionStorage.removeItem(CLAIM_PACKING_SNAPSHOT_KEY);
+      return;
+    }
+    sessionStorage.setItem(CLAIM_PACKING_SNAPSHOT_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function readClaimPackingSnapshot(): PackingItem[] {
+  if (typeof window === "undefined" || typeof sessionStorage === "undefined") {
+    return [];
+  }
+  try {
+    const raw = sessionStorage.getItem(CLAIM_PACKING_SNAPSHOT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return isPackingItemArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function clearClaimPackingSnapshot(): void {
+  if (typeof window === "undefined" || typeof sessionStorage === "undefined") {
+    return;
+  }
+  try {
+    sessionStorage.removeItem(CLAIM_PACKING_SNAPSHOT_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+/** Restore snapshot into local guest packing storage after a failed claim rebuild. */
+export function restoreClaimPackingSnapshot(): PackingItem[] {
+  const items = readClaimPackingSnapshot();
+  if (items.length > 0) {
+    writeGuestPackingItems(items);
+    const packed: GuestPackedItems = {};
+    for (const item of items) {
+      packed[item.name] = item.packed === true;
+    }
+    writeGuestPackedItems(packed);
+    syncGuestCheckoffCount(items);
+  }
+  return items;
 }
 
 export function hasGuestTrip(): boolean {

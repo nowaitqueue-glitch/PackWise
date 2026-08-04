@@ -83,7 +83,7 @@ export function GuestLockedDialog({
             Dismiss
           </Button>
           <Button asChild>
-            <Link href="/login?from=signup">Sign up free</Link>
+            <Link href="/signup?from=guest">Sign up free</Link>
           </Button>
         </DialogFooter>
       </DialogContent>

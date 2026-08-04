@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,12 +13,10 @@ import {
   Users,
 } from "lucide-react";
 import { GuestLockedDialog } from "@/components/guest-locked-dialog";
-import {
-  GuestPackingList,
-  type GuestPackedStats,
-} from "@/components/guest-packing-list";
+import type { GuestPackedStats } from "@/components/guest-packing-list";
 import { GuestSaveCta } from "@/components/guest-save-cta";
 import { GuestWeatherSection } from "@/components/guest-weather-section";
+import { usePillBanner } from "@/components/pill-banner-provider";
 import { TripCardSkeleton } from "@/components/trip-card-skeleton";
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
@@ -36,8 +35,11 @@ import {
   dismissGuestCta,
   isGuestCtaDismissed,
   isGuestLockedDismissed,
+  readGuestCustomItems,
+  readGuestPackingItems,
   readGuestTrip,
   syncGuestCheckoffCount,
+  writeGuestPackingItems,
   writeGuestTrip,
   type GuestTrip,
 } from "@/lib/guest-storage";
@@ -53,6 +55,16 @@ import {
   travelGradient,
   tripTitleClass,
 } from "@/lib/utils";
+
+const GuestPackingList = dynamic(
+  () =>
+    import("@/components/guest-packing-list").then((m) => ({
+      default: m.GuestPackingList,
+    })),
+  {
+    loading: () => <TripPackingListSkeleton />,
+  }
+);
 
 function formatDateRange(start: string, end: string): string {
   const opts: Intl.DateTimeFormatOptions = {
@@ -73,8 +85,10 @@ function formatDateRange(start: string, end: string): string {
 
 export default function GuestDashboardPage() {
   const router = useRouter();
+  const { showBanner } = usePillBanner();
   const [trip, setTrip] = useState<GuestTrip | null | undefined>(undefined);
   const [packingItems, setPackingItems] = useState<PackingItem[]>([]);
+  const packingItemsRef = useRef<PackingItem[]>([]);
   const [packingBusy, setPackingBusy] = useState(false);
   const [packingError, setPackingError] = useState<string | null>(null);
   const [sampleBusy, setSampleBusy] = useState(false);
@@ -90,39 +104,82 @@ export default function GuestDashboardPage() {
     setTrip(readGuestTrip());
     setCtaDismissed(isGuestCtaDismissed());
     setLockedDismissed(isGuestLockedDismissed());
-  }, []);
-
-  const loadPacking = useCallback(async (guestTrip: GuestTrip) => {
-    setPackingBusy(true);
-    setPackingError(null);
-    try {
-      const { items } = await buildGuestPackingList({
-        destination: guestTrip.destination,
-        startDate: guestTrip.startDate,
-        endDate: guestTrip.endDate,
-        tripType: guestTrip.tripType,
-        travelers: guestTrip.travelers,
-      });
-      const withPacked = applyPackedState(items);
-      const count = syncGuestCheckoffCount(withPacked);
-      setPackingItems(withPacked);
+    const cached = applyPackedState(readGuestPackingItems());
+    const custom = applyPackedState(readGuestCustomItems());
+    const merged = [
+      ...cached.map((item) => ({ ...item, isCustom: false as const })),
+      ...custom.map((item) => ({ ...item, isCustom: true as const })),
+    ];
+    if (merged.length > 0) {
+      setPackingItems(cached);
+      const count = syncGuestCheckoffCount(merged);
       setCheckoffCount(count);
       setPackedCount(count);
-      setTotalCount(withPacked.length);
-    } catch (error) {
-      setPackingItems([]);
-      setCheckoffCount(syncGuestCheckoffCount([]));
-      setPackedCount(0);
-      setTotalCount(0);
-      setPackingError(
-        error instanceof Error
-          ? error.message
-          : "Could not build packing list."
-      );
-    } finally {
-      setPackingBusy(false);
+      setTotalCount(merged.length);
     }
   }, []);
+
+  useEffect(() => {
+    packingItemsRef.current = packingItems;
+  }, [packingItems]);
+
+  const loadPacking = useCallback(
+    async (guestTrip: GuestTrip) => {
+      // F5: keep a backup so a failed refresh does not wipe a good list.
+      const backup = packingItemsRef.current;
+      setPackingBusy(true);
+      setPackingError(null);
+      try {
+        const { items } = await buildGuestPackingList({
+          destination: guestTrip.destination,
+          startDate: guestTrip.startDate,
+          endDate: guestTrip.endDate,
+          tripType: guestTrip.tripType,
+          travelers: guestTrip.travelers,
+        });
+        const withPacked = applyPackedState(items);
+        writeGuestPackingItems(withPacked);
+        const custom = applyPackedState(readGuestCustomItems());
+        const merged = [...withPacked, ...custom];
+        const count = syncGuestCheckoffCount(merged);
+        setPackingItems(withPacked);
+        setCheckoffCount(count);
+        setPackedCount(count);
+        setTotalCount(merged.length);
+      } catch (error) {
+        if (backup.length > 0) {
+          const custom = applyPackedState(readGuestCustomItems());
+          const merged = [...backup, ...custom];
+          const count = syncGuestCheckoffCount(merged);
+          setPackingItems(backup);
+          setCheckoffCount(count);
+          setPackedCount(count);
+          setTotalCount(merged.length);
+          setPackingError(null);
+          showBanner({
+            message:
+              "Couldn't refresh packing list. Showing your last saved list.",
+            variant: "error",
+          });
+        } else {
+          const custom = applyPackedState(readGuestCustomItems());
+          setPackingItems([]);
+          const count = syncGuestCheckoffCount(custom);
+          setCheckoffCount(count);
+          setPackedCount(count);
+          setTotalCount(custom.length);
+          setPackingError(
+            error instanceof Error
+              ? error.message
+              : "Could not build packing list."
+          );
+        }
+      } finally {
+        setPackingBusy(false);
+      }
+    },
+    [showBanner]
+  );
 
   useEffect(() => {
     if (!trip) return;
@@ -154,7 +211,7 @@ export default function GuestDashboardPage() {
   function handleLockedFeature(feature: string) {
     // After dismiss, send guests straight to signup instead of reopening the dialog.
     if (lockedDismissed) {
-      router.push("/login?from=signup");
+      router.push("/signup?from=guest");
       return;
     }
     setLockedFeature(feature);
@@ -293,28 +350,33 @@ export default function GuestDashboardPage() {
               </div>
             </dl>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button asChild className="flex-1">
-                <Link href="/signup?from=guest">Create a free account</Link>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => handleLockedFeature("Share trip")}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleLockedFeature("Share trip")}
+                >
+                  <Lock aria-hidden />
+                  Share trip
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleLockedFeature("Suitcase Snap")}
+                >
+                  <Lock aria-hidden />
+                  Suitcase Snap
+                </Button>
+              </div>
+              <Link
+                href="/signup?from=guest"
+                className="text-sm text-muted-foreground hover:text-primary"
               >
-                <Lock aria-hidden />
-                Share trip
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => handleLockedFeature("Suitcase Snap")}
-              >
-                <Lock aria-hidden />
-                Suitcase Snap
-              </Button>
+                Create an account to save trips →
+              </Link>
             </div>
           </CardContent>
         </Card>

@@ -8,6 +8,7 @@ type LoginPageProps = {
     error?: string;
     deleted?: string;
     from?: string;
+    claim?: string;
   };
 };
 
@@ -16,6 +17,25 @@ function safeNextPath(next: string | undefined): string {
     return "/dashboard";
   }
   return next;
+}
+
+function wantsGuestClaim(
+  searchParams: LoginPageProps["searchParams"]
+): boolean {
+  if (searchParams.claim === "guest" || searchParams.from === "guest") {
+    return true;
+  }
+  const next = safeNextPath(searchParams.next);
+  return next === "/guest/claim" || next.startsWith("/guest/claim?");
+}
+
+function resolveNextPath(
+  searchParams: LoginPageProps["searchParams"]
+): string {
+  if (wantsGuestClaim(searchParams)) {
+    return "/guest/claim";
+  }
+  return safeNextPath(searchParams.next);
 }
 
 function bannerFromParams(
@@ -33,12 +53,7 @@ function bannerFromParams(
       variant: "error",
     };
   }
-  const next = safeNextPath(searchParams.next);
-  if (
-    next === "/guest/claim" ||
-    next.startsWith("/guest/claim?") ||
-    searchParams.from === "guest"
-  ) {
+  if (wantsGuestClaim(searchParams)) {
     return {
       message:
         "Create a free account or sign in to save your guest trip and unlock all features.",
@@ -49,15 +64,21 @@ function bannerFromParams(
 }
 
 export default function LoginPage({ searchParams }: LoginPageProps) {
+  const nextPath = resolveNextPath(searchParams);
+  const claimGuest = wantsGuestClaim(searchParams);
+
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10 sm:px-6 sm:py-14">
       <LandingBackground />
       <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-6">
         <BrandLogo href="/" className="drop-shadow-sm" />
         <LoginForm
-          nextPath={safeNextPath(searchParams.next)}
+          nextPath={nextPath}
+          claimGuest={claimGuest}
           initialBanner={bannerFromParams(searchParams)}
-          fromSignup={searchParams.from === "signup"}
+          fromSignup={
+            searchParams.from === "signup" || searchParams.from === "guest"
+          }
         />
       </div>
     </main>

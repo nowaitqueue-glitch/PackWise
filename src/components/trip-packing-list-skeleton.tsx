@@ -1,9 +1,9 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, glassCard } from "@/lib/utils";
+import { cn, solidContentCard } from "@/lib/utils";
 
 function PackingPanelSkeleton({ children }: { children: React.ReactNode }) {
   return (
-    <section className={cn("relative overflow-hidden", glassCard)}>
+    <section className={cn("relative overflow-hidden", solidContentCard)}>
       <div className="relative z-10 flex flex-col gap-4 p-5 sm:p-6">
         {children}
       </div>

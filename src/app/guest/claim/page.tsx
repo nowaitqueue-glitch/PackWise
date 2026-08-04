@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Luggage } from "lucide-react";
@@ -9,10 +9,15 @@ import { createClient } from "@/lib/supabase/client";
 import { buildGuestPackingList } from "@/lib/guest-packing";
 import {
   applyPackedState,
+  clearClaimPackingSnapshot,
   clearGuestTrip,
+  readGuestCustomItems,
+  readGuestPackingItems,
   readGuestTrip,
+  restoreClaimPackingSnapshot,
+  snapshotClaimPackingItems,
+  writeGuestPackingItems,
 } from "@/lib/guest-storage";
-import type { PackingItem } from "@/lib/packing";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,14 +28,21 @@ import {
 } from "@/components/ui/card";
 import { cn, glassCard, glassContentOverlay, travelGradient } from "@/lib/utils";
 
+const REBUILD_FAIL_MESSAGE =
+  "We couldn't rebuild your packing list just now. Your guest trip is still saved in this browser — try again in a moment.";
+
 export default function GuestClaimPage() {
   const router = useRouter();
+  const claimedRef = useRef(false);
   const [status, setStatus] = useState<
     "checking" | "claiming" | "empty" | "error" | "done"
   >("checking");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (claimedRef.current) return;
+    claimedRef.current = true;
+
     let cancelled = false;
 
     void (async () => {
@@ -40,8 +52,14 @@ export default function GuestClaimPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.replace("/login?next=/guest/claim&from=guest");
+        router.replace("/login?next=/guest/claim&from=guest&claim=guest");
         return;
+      }
+
+      try {
+        sessionStorage.removeItem("packwise-claim-guest");
+      } catch {
+        // ignore
       }
 
       const trip = readGuestTrip();
@@ -52,18 +70,42 @@ export default function GuestClaimPage() {
 
       if (!cancelled) setStatus("claiming");
 
-      let packingItems: PackingItem[] = [];
-      try {
-        const built = await buildGuestPackingList({
-          destination: trip.destination,
-          startDate: trip.startDate,
-          endDate: trip.endDate,
-          tripType: trip.tripType,
-          travelers: trip.travelers,
-        });
-        packingItems = applyPackedState(built.items);
-      } catch {
-        packingItems = [];
+      // Prefer the list the guest already saw; snapshot before any rebuild.
+      let packingItems = applyPackedState(readGuestPackingItems());
+      const customItems = applyPackedState(readGuestCustomItems());
+      snapshotClaimPackingItems(packingItems);
+
+      if (packingItems.length === 0 && customItems.length === 0) {
+        try {
+          const built = await buildGuestPackingList({
+            destination: trip.destination,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            tripType: trip.tripType,
+            travelers: trip.travelers,
+          });
+          packingItems = applyPackedState(built.items);
+          if (packingItems.length > 0) {
+            writeGuestPackingItems(packingItems);
+            snapshotClaimPackingItems(packingItems);
+          }
+        } catch {
+          restoreClaimPackingSnapshot();
+          if (!cancelled) {
+            setError(REBUILD_FAIL_MESSAGE);
+            setStatus("error");
+          }
+          return;
+        }
+      }
+
+      if (packingItems.length === 0 && customItems.length === 0) {
+        restoreClaimPackingSnapshot();
+        if (!cancelled) {
+          setError(REBUILD_FAIL_MESSAGE);
+          setStatus("error");
+        }
+        return;
       }
 
       const result = await claimGuestTrip({
@@ -75,17 +117,20 @@ export default function GuestClaimPage() {
           travelers: trip.travelers,
         },
         packingItems,
+        customItems,
         packingSource: "template",
       });
 
       if (cancelled) return;
 
       if (!result.ok) {
+        restoreClaimPackingSnapshot();
         setError(result.error);
         setStatus("error");
         return;
       }
 
+      clearClaimPackingSnapshot();
       clearGuestTrip();
       setStatus("done");
       router.replace(`/dashboard/trips/${result.tripId}?created=1`);
@@ -153,6 +198,9 @@ export default function GuestClaimPage() {
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button asChild>
+                    <Link href="/guest/claim">Try again</Link>
+                  </Button>
+                  <Button asChild variant="outline">
                     <Link href="/dashboard/guest">Back to guest demo</Link>
                   </Button>
                   <Button asChild variant="outline">

@@ -1,8 +1,14 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ListPlus, Loader2, Sparkles } from "lucide-react";
+import {
+  ChevronDown,
+  ListPlus,
+  Loader2,
+  ScanLine,
+  Sparkles,
+} from "lucide-react";
 import {
   addSuitcaseSuggestionsToList,
   scanSuitcase,
@@ -42,6 +48,8 @@ type TripSuitcaseScanProps = {
   scansRemaining: number;
   /** Owner can append suggestions to the packing list. */
   canEdit?: boolean;
+  /** Packed items so far — Snap stays collapsed until at least one checkoff. */
+  packedCount?: number;
 };
 
 export function TripSuitcaseScan({
@@ -49,6 +57,7 @@ export function TripSuitcaseScan({
   isPro,
   scansRemaining: initialScansRemaining,
   canEdit = false,
+  packedCount = 0,
 }: TripSuitcaseScanProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,9 +68,16 @@ export function TripSuitcaseScan({
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [isAnalyzingOverlay, setIsAnalyzingOverlay] = useState(false);
   const [addedAll, setAddedAll] = useState(false);
+  const [expanded, setExpanded] = useState(packedCount >= 1);
   const [isPending, startTransition] = useTransition();
   const [isCheckoutPending, startCheckout] = useTransition();
   const [isAddAllPending, startAddAll] = useTransition();
+
+  useEffect(() => {
+    if (packedCount >= 1) {
+      setExpanded(true);
+    }
+  }, [packedCount]);
 
   const outOfScans = !isPro && scansRemaining <= 0;
   const showAnalyzing = isAnalyzingOverlay || isPending;
@@ -129,6 +145,9 @@ export function TripSuitcaseScan({
         if (!result.ok) {
           showBanner({ message: result.error, variant: "error" });
           setSuggestions(null);
+          if (typeof result.scansRemaining === "number") {
+            setScansRemaining(result.scansRemaining);
+          }
           if (result.code === "SCAN_LIMIT") {
             setScansRemaining(0);
             setUpgradeOpen(true);
@@ -197,26 +216,54 @@ export function TripSuitcaseScan({
         solidContentCard,
         glassCardHover
       )}
+      data-testid="suitcase-snap"
     >
       <CardHeader className="relative z-10">
-        <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className={sectionTitleClass}>Scan My Suitcase</CardTitle>
-          {isPro ? (
-            <Badge variant="pro">Pro · Unlimited</Badge>
-          ) : (
-            <Badge variant="secondary" data-testid="suitcase-scans-remaining">
-              {quotaLabel}
-            </Badge>
-          )}
-        </div>
-        <CardDescription>
-          Snap a photo of your open luggage. AI checks for obviously missing
-          essentials based on this trip&apos;s destination and weather.
-          {!isPro
-            ? " Free accounts get 3 scans per month."
-            : null}
-        </CardDescription>
+        <button
+          type="button"
+          className="flex w-full items-start justify-between gap-3 text-left"
+          aria-expanded={expanded}
+          data-testid="suitcase-snap-toggle"
+          onClick={() => setExpanded((open) => !open)}
+        >
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className={sectionTitleClass}>Scan My Suitcase</CardTitle>
+              {isPro ? (
+                <Badge variant="pro">Pro · Unlimited</Badge>
+              ) : (
+                <Badge variant="secondary" data-testid="suitcase-scans-remaining">
+                  {quotaLabel}
+                </Badge>
+              )}
+            </div>
+            <CardDescription>
+              {expanded ? (
+                <>
+                  Snap a photo of your open luggage. AI checks for obviously
+                  missing essentials based on this trip&apos;s destination and
+                  weather.
+                  {!isPro
+                    ? " Free accounts get 3 scans per month."
+                    : null}
+                </>
+              ) : packedCount < 1 ? (
+                "Check off at least one packing item first, then open Suitcase Snap."
+              ) : (
+                "Snap a photo of your open luggage when you are ready."
+              )}
+            </CardDescription>
+          </div>
+          <ChevronDown
+            className={cn(
+              "mt-1 size-5 shrink-0 text-muted-foreground transition-transform",
+              expanded && "rotate-180"
+            )}
+            aria-hidden
+          />
+        </button>
       </CardHeader>
+      {expanded ? (
       <CardContent className="relative z-10 flex flex-col gap-4">
         <input
           ref={inputRef}
@@ -254,7 +301,8 @@ export function TripSuitcaseScan({
               </>
             ) : (
               <>
-                📸 Scan My Suitcase
+                <ScanLine aria-hidden />
+                Scan My Suitcase
                 {!isPro ? (
                   <span className="font-normal text-white/80">
                     ({quotaLabel})
@@ -353,6 +401,7 @@ export function TripSuitcaseScan({
           </div>
         ) : null}
       </CardContent>
+      ) : null}
 
       <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
         <DialogContent>

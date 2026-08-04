@@ -87,11 +87,23 @@ export function TripPackingList({
       return;
     }
 
+    // F7: prefer stable id; never fall back to index when id was provided but missing.
+    if (item.id) {
+      const byId = localItems.findIndex((entry) => entry.id === item.id);
+      if (byId < 0) {
+        console.warn("Item not found:", item.id);
+        return;
+      }
+    }
+
     const previous = localItems;
     setLocalItems((current) =>
-      current.map((entry, index) =>
-        index === itemIndex ? { ...entry, packed } : entry
-      )
+      current.map((entry, index) => {
+        if (item.id) {
+          return entry.id === item.id ? { ...entry, packed } : entry;
+        }
+        return index === itemIndex ? { ...entry, packed } : entry;
+      })
     );
 
     startMutate(async () => {
@@ -103,10 +115,13 @@ export function TripPackingList({
           })
         : await updatePackingItemPacked({
             tripId,
-            itemId: item.id,
-            itemIndex: localItems
-              .slice(0, itemIndex)
-              .filter((entry) => !entry.isCustom).length,
+            ...(item.id
+              ? { itemId: item.id }
+              : {
+                  itemIndex: localItems
+                    .slice(0, itemIndex)
+                    .filter((entry) => !entry.isCustom).length,
+                }),
             packed,
           });
 

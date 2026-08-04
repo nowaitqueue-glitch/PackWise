@@ -152,12 +152,14 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Neck pillow (inflatable or memory foam)",
     category: "In-Flight",
     tags: ["longFlight"],
+    affiliateLink: "https://geni.us/packwise-neck-pillow",
     notes: "Support for napping upright in your seat",
   },
   {
     name: "Compression socks",
     category: "In-Flight",
     tags: ["longFlight"],
+    affiliateLink: "https://geni.us/packwise-compression-socks",
     notes: "Improves circulation on long flights",
   },
   {
@@ -284,6 +286,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Waterproof rain jacket",
     category: "Clothing",
     tags: ["rain", "humid"],
+    affiliateLink: "https://geni.us/packwise-rain-jacket",
     notes: "Packable shell to stay dry",
   },
   {
@@ -572,6 +575,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     tags: ["mandatory", "all"],
     quantityMode: "per_person_consumable",
     quantityRule: { type: "fixed", value: 1 },
+    affiliateLink: "https://geni.us/packwise-toiletry-bag",
     notes: "Toothbrush, toothpaste, deodorant, basic skincare",
   },
   {
@@ -580,6 +584,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     tags: ["UV", "hot", "beach", "ski"],
     quantityMode: "per_person_consumable",
     quantityRule: { type: "fixed", value: 1 },
+    affiliateLink: "https://geni.us/packwise-sunscreen",
     notes: "Reapply often; reef-safe if swimming outdoors",
   },
   {
@@ -697,12 +702,14 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Universal power adapter",
     category: "Electronics",
     tags: ["mandatory", "all"],
+    affiliateLink: "https://geni.us/packwise-universal-adapter",
     notes: "Covers the destination's plug type",
   },
   {
     name: "Power bank",
     category: "Electronics",
     tags: ["mandatory", "all"],
+    affiliateLink: "https://geni.us/packwise-power-bank",
     notes: "For long travel days and sightseeing",
   },
   {
@@ -791,6 +798,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Quick-dry travel towel",
     category: "Comfort",
     tags: ["humid", "hiking", "longTrip"],
+    affiliateLink: "https://geni.us/packwise-quick-dry-towel",
     notes: "Dries fast in humid conditions",
   },
 
@@ -890,8 +898,16 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
   {
     name: "Packing cubes",
     category: "Miscellaneous",
-    tags: ["longTrip"],
+    tags: ["longTrip", "all"],
+    affiliateLink: "https://geni.us/packwise-packing-cubes",
     notes: "Keep a longer trip's clothes organized",
+  },
+  {
+    name: "Luggage scale",
+    category: "Miscellaneous",
+    tags: ["flight", "all"],
+    affiliateLink: "https://geni.us/packwise-luggage-scale",
+    notes: "Avoid airline overweight fees before you leave",
   },
   {
     name: "Reusable shopping bag",

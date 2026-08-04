@@ -14,57 +14,13 @@ const withPWA = withPWAInit({
 });
 
 /**
- * Browser-facing CSP allowlist derived from app usage:
- * - Supabase Auth / REST / Storage (client + SSR)
- * - Plausible analytics script
- * - Stripe Checkout redirect / optional Stripe.js
- * - Open-Meteo (server-proxied today; allowlisted for connect-src)
- * - Gemini is server-only (no browser connect)
- * - next/font self-hosts Google fonts (no fonts.googleapis.com at runtime)
- * - Suitcase Snap uses camera + blob: previews
+ * Non-CSP security headers.
+ *
+ * Content-Security-Policy is set in `src/middleware.ts` with a per-request
+ * nonce so Next.js can hydrate under `script-src ... 'strict-dynamic'`.
+ * Do NOT also emit CSP here — browsers enforce every CSP header, and a
+ * nonce-less policy would block framework scripts again.
  */
-function buildContentSecurityPolicy() {
-  const isDev = process.env.NODE_ENV !== "production";
-
-  const scriptSrc = [
-    "'self'",
-    "'unsafe-inline'",
-    // Next.js webpack HMR / some tooling need eval in development only.
-    ...(isDev ? ["'unsafe-eval'"] : []),
-    "https://plausible.io",
-    "https://js.stripe.com",
-  ];
-
-  const connectSrc = [
-    "'self'",
-    "https://*.supabase.co",
-    "wss://*.supabase.co",
-    "https://plausible.io",
-    "https://api.stripe.com",
-    "https://api.open-meteo.com",
-    "https://geocoding-api.open-meteo.com",
-  ];
-
-  const directives = [
-    "default-src 'self'",
-    `script-src ${scriptSrc.join(" ")}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co",
-    "font-src 'self' data:",
-    `connect-src ${connectSrc.join(" ")}`,
-    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
-    "worker-src 'self' blob:",
-    "media-src 'self' blob:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self' https://checkout.stripe.com",
-    "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
-  ];
-
-  return directives.join("; ");
-}
-
 function securityHeaders() {
   return [
     {
@@ -91,14 +47,12 @@ function securityHeaders() {
       key: "Permissions-Policy",
       value: "camera=(self), microphone=(), geolocation=()",
     },
-    {
-      key: "Content-Security-Policy",
-      value: buildContentSecurityPolicy(),
-    },
   ];
 }
 
 /** @type {import('next').NextConfig} */
+// Future: wrap with @sentry/nextjs (withSentryConfig) once error reporting
+// graduates from console-only reportError in src/lib/error-reporting.ts.
 const nextConfig = {
   // Keep root-level test helpers out of serverless traces.
   // App Router still compiles `src/app/api/test/*`; those handlers hard-404

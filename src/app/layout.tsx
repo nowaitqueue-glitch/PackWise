@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Nunito } from "next/font/google";
 import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import "./globals.css";
@@ -58,6 +59,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Reading headers() opts the tree into dynamic rendering so the per-request
+  // CSP nonce from middleware can be applied to third-party Script tags.
+  const nonce = headers().get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning className={nunito.variable}>
       <body
@@ -78,18 +83,19 @@ export default function RootLayout({
             className="pointer-events-none fixed inset-0 -z-10 bg-[url('/images/pattern.png')] bg-repeat bg-fixed max-sm:bg-scroll opacity-[0.07] dark:opacity-[0.05]"
           />
           <div className="relative z-10">
-            <ErrorBoundary>
+            <GlobalErrorBoundary>
               <ThemeProvider
                 attribute="class"
                 defaultTheme="system"
                 enableSystem
                 disableTransitionOnChange
+                nonce={nonce}
               >
                 {children}
                 <CookieConsentBanner />
-                <Analytics />
+                <Analytics nonce={nonce} />
               </ThemeProvider>
-            </ErrorBoundary>
+            </GlobalErrorBoundary>
           </div>
         </div>
       </body>

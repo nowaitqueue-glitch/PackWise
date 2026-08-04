@@ -6,13 +6,14 @@ import { useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Sheet,
   SheetContent,
@@ -37,16 +38,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CountryCombobox } from "@/components/country-combobox";
-import { CityCombobox } from "@/components/city-combobox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TRIP_TYPES, formatTripType } from "@/lib/trips";
 import { composeDestination } from "@/lib/trip-destination";
 import {
   hasGuestTrip,
+  writeGuestCustomItems,
+  writeGuestPackingItems,
   writeGuestTrip,
 } from "@/lib/guest-storage";
 import { cn, fieldClass, glassCard, sectionTitleClass } from "@/lib/utils";
 import { createTrip, updateTrip, type CreateTripState } from "./actions";
+
+const CityCombobox = dynamic(() => import("@/components/city-combobox").then((m) => ({ default: m.CityCombobox })), {
+  ssr: false,
+  loading: () => <Skeleton className="h-10 w-full" />,
+});
+
+const CountryCombobox = dynamic(
+  () =>
+    import("@/components/country-combobox").then((m) => ({
+      default: m.CountryCombobox,
+    })),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-10 w-full" />,
+  }
+);
+
+const Calendar = dynamic(
+  () =>
+    import("@/components/ui/calendar").then((m) => ({ default: m.Calendar })),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="mx-auto h-[300px] w-full max-w-sm" />,
+  }
+);
 
 const initialState: CreateTripState = { error: null };
 
@@ -113,6 +140,21 @@ function formatRangeLabel(range: DateRange | undefined): string {
   return `${fromLabel} – ${toLabel}`;
 }
 
+/** Inclusive day count + labels for the date-sheet preview (e.g. "Aug 12 — Aug 20 (8 days)"). */
+function formatRangePreview(range: DateRange | undefined): string | null {
+  if (!range?.from || !range?.to) return null;
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const fromLabel = range.from.toLocaleDateString(undefined, opts);
+  const toLabel = range.to.toLocaleDateString(undefined, opts);
+  const fromDay = new Date(range.from);
+  fromDay.setHours(0, 0, 0, 0);
+  const toDay = new Date(range.to);
+  toDay.setHours(0, 0, 0, 0);
+  const days = Math.round((toDay.getTime() - fromDay.getTime()) / 86_400_000) + 1;
+  if (!Number.isFinite(days) || days < 1) return null;
+  return `${fromLabel} — ${toLabel} (${days} ${days === 1 ? "day" : "days"})`;
+}
+
 const newTripSchema = z
   .object({
     city: z
@@ -153,6 +195,7 @@ export function NewTripForm({
   );
   const [isPending, startTransition] = useTransition();
   const [guestBusy, setGuestBusy] = useState(false);
+  const [guestReplacePrompt, setGuestReplacePrompt] = useState(false);
   const { showBanner } = usePillBanner();
 
   useEffect(() => {
@@ -174,10 +217,20 @@ export function NewTripForm({
   });
 
   const tripType = form.watch("trip_type");
+  const city = form.watch("city");
   const countryCode = form.watch("countryCode");
   const startDate = form.watch("start_date");
   const endDate = form.watch("end_date");
   const [dateOpen, setDateOpen] = useState(false);
+
+  const requiredFieldsComplete = Boolean(
+    city.trim().length >= 2 &&
+      !/\d/.test(city) &&
+      startDate &&
+      endDate &&
+      endDate >= startDate &&
+      tripType
+  );
 
   // Local, uncommitted selection edited inside the sheet. Only copied into the
   // form values when the user confirms with "Done"; discarded on cancel/esc.
@@ -234,17 +287,14 @@ export function NewTripForm({
     setDateOpen(false);
   }
 
-  async function onGuestValid(values: NewTripValues) {
-    if (hasGuestTrip()) {
-      showBanner({
-        message:
-          "Please create a free account to unlock this feature.",
-        variant: "error",
-      });
+  async function saveGuestTrip(values: NewTripValues, replaceExisting: boolean) {
+    if (!replaceExisting && hasGuestTrip()) {
+      setGuestReplacePrompt(true);
       return;
     }
 
     setGuestBusy(true);
+    setGuestReplacePrompt(false);
     try {
       const destination = composeDestination(
         values.city.trim(),
@@ -253,6 +303,11 @@ export function NewTripForm({
       if (!destination) {
         showBanner({ message: "Destination is required.", variant: "error" });
         return;
+      }
+
+      if (replaceExisting) {
+        writeGuestPackingItems([]);
+        writeGuestCustomItems([]);
       }
 
       writeGuestTrip({
@@ -264,7 +319,9 @@ export function NewTripForm({
       });
 
       showBanner({
-        message: "Guest trip created — stored in this browser only.",
+        message: replaceExisting
+          ? "Demo trip replaced — stored in this browser only."
+          : "Guest trip created — stored in this browser only.",
         variant: "success",
       });
       router.push("/dashboard/guest");
@@ -275,6 +332,10 @@ export function NewTripForm({
     } finally {
       setGuestBusy(false);
     }
+  }
+
+  async function onGuestValid(values: NewTripValues) {
+    await saveGuestTrip(values, false);
   }
 
   function onValid(values: NewTripValues) {
@@ -314,18 +375,26 @@ export function NewTripForm({
             name="countryCode"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className={labelClass}>Country</FormLabel>
+                <FormLabel className={labelClass}>
+                  Country{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                </FormLabel>
                 <FormControl>
-                  <CountryCombobox
-                    value={field.value}
-                    onChange={(code) => {
-                      field.onChange(code);
-                      form.setValue("city", "");
-                    }}
-                  />
+                  <div className="w-full">
+                    <CountryCombobox
+                      value={field.value}
+                      onChange={(code) => {
+                        field.onChange(code);
+                        form.setValue("city", "");
+                      }}
+                    />
+                  </div>
                 </FormControl>
                 <FormDescription>
-                  Optional, recommended — stored as an ISO country code.
+                  Optional — narrows city suggestions. You can leave this blank
+                  and search cities worldwide.
                 </FormDescription>
                 <FormMessage className={errorPanelClass} />
               </FormItem>
@@ -339,13 +408,20 @@ export function NewTripForm({
               <FormItem>
                 <FormLabel className={labelClass}>City</FormLabel>
                 <FormControl>
-                  <CityCombobox
-                    value={field.value}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    countryCode={countryCode}
-                  />
+                  <div className="w-full">
+                    <CityCombobox
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      countryCode={countryCode}
+                    />
+                  </div>
                 </FormControl>
+                <FormDescription>
+                  {countryCode.trim()
+                    ? "Search cities in the selected country, or type a custom city."
+                    : "Search cities worldwide — country is optional."}
+                </FormDescription>
                 <FormMessage
                   className={errorPanelClass}
                   data-testid="city-error"
@@ -415,23 +491,33 @@ export function NewTripForm({
                         </p>
                       )}
                     </div>
-                    <SheetFooter className="flex-row justify-end gap-3 border-t border-border/60 px-5 py-4 sm:space-x-0">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleCancelDates}
-                        data-testid="date-range-cancel"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={handleDoneDates}
-                        disabled={!tempRangeComplete}
-                        data-testid="date-range-done"
-                      >
-                        Done
-                      </Button>
+                    <SheetFooter className="flex-col gap-3 border-t border-border/60 px-5 py-4 sm:space-x-0">
+                      {tempRangeComplete ? (
+                        <p
+                          className="w-full text-center text-sm font-medium sm:text-left"
+                          data-testid="date-range-preview"
+                        >
+                          {formatRangePreview(tempRange)}
+                        </p>
+                      ) : null}
+                      <div className="flex w-full flex-row justify-end gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCancelDates}
+                          data-testid="date-range-cancel"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleDoneDates}
+                          disabled={!tempRangeComplete}
+                          data-testid="date-range-done"
+                        >
+                          Done
+                        </Button>
+                      </div>
                     </SheetFooter>
                   </SheetContent>
                 </Sheet>
@@ -516,25 +602,64 @@ export function NewTripForm({
           />
         </section>
 
+        {guestMode && guestReplacePrompt ? (
+          <div
+            role="status"
+            className="flex flex-col gap-3 rounded-xl border border-brand-from/25 bg-brand-from/10 px-4 py-3 text-sm"
+            data-testid="guest-replace-prompt"
+          >
+            <p className="text-foreground">
+              Guest mode keeps one demo trip in this browser. Replace it with
+              this new one, or create a free account for multiple trips.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                data-testid="guest-replace-demo"
+                onClick={() => {
+                  void form.handleSubmit((values) =>
+                    saveGuestTrip(values, true)
+                  )();
+                }}
+              >
+                Replace my demo trip
+              </Button>
+              <Button asChild type="button" size="sm" variant="outline">
+                <Link href="/signup?from=guest">Sign up free</Link>
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <Button
           type="submit"
           size="lg"
           className="w-full"
-          disabled={busy || !tripType}
+          disabled={busy || !requiredFieldsComplete}
           data-testid={isEdit ? "edit-trip-submit" : "create-trip-submit"}
         >
           {busy
             ? guestMode
-              ? "Building list…"
+              ? "Saving trip…"
               : isEdit
                 ? "Saving…"
-                : "Creating…"
+                : "Creating trip…"
             : guestMode
               ? "Create guest trip"
               : isEdit
                 ? "Save changes"
                 : "Create trip"}
         </Button>
+        {!requiredFieldsComplete && !busy ? (
+          <p
+            className="text-center text-sm text-muted-foreground"
+            data-testid="submit-incomplete-hint"
+          >
+            Add a city, trip dates, and trip type to continue.
+          </p>
+        ) : null}
       </form>
     </Form>
   );

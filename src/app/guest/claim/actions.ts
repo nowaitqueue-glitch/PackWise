@@ -18,6 +18,8 @@ export type ClaimGuestTripInput = {
     travelers: number;
   };
   packingItems: PackingItem[];
+  /** Guest custom items → packing_custom_items on claim. */
+  customItems?: PackingItem[];
   packingSource?: "template" | "ai";
 };
 
@@ -59,6 +61,30 @@ export async function claimGuestTrip(
     return { ok: false, error: "Guest trip has an invalid traveler count." };
   }
 
+  const generatedInput = (input.packingItems ?? []).filter(
+    (item) => !item.isCustom
+  );
+  const customInput = [
+    ...(input.customItems ?? []),
+    ...(input.packingItems ?? []).filter((item) => item.isCustom),
+  ];
+
+  const items = normalizePackingItemsForStorage(generatedInput);
+  const customItems = normalizePackingItemsForStorage(customInput).map(
+    (item) => ({
+      ...item,
+      isCustom: true as const,
+    })
+  );
+
+  if (items.length === 0 && customItems.length === 0) {
+    return {
+      ok: false,
+      error:
+        "Your packing list wasn't ready yet. Keep your guest trip and try saving again in a moment.",
+    };
+  }
+
   const { data: trip, error: tripError } = await supabase
     .from("trips")
     .insert({
@@ -79,20 +105,45 @@ export async function claimGuestTrip(
     };
   }
 
-  const items = normalizePackingItemsForStorage(input.packingItems ?? []);
-  const { error: packingError } = await supabase.from("packing_lists").upsert(
-    {
-      trip_id: trip.id,
-      items: toPackingListPayload(items, input.packingSource ?? "template"),
-    },
-    { onConflict: "trip_id" }
-  );
+  if (items.length > 0) {
+    const { error: packingError } = await supabase.from("packing_lists").upsert(
+      {
+        trip_id: trip.id,
+        items: toPackingListPayload(items, input.packingSource ?? "template"),
+      },
+      { onConflict: "trip_id" }
+    );
 
-  if (packingError) {
-    return {
-      ok: false,
-      error: packingError.message ?? "Trip saved but packing list failed.",
-    };
+    if (packingError) {
+      return {
+        ok: false,
+        error: packingError.message ?? "Trip saved but packing list failed.",
+      };
+    }
+  }
+
+  if (customItems.length > 0) {
+    const { error: customError } = await supabase
+      .from("packing_custom_items")
+      .insert(
+        customItems.map((item) => ({
+          trip_id: trip.id,
+          user_id: user.id,
+          name: item.name,
+          category: item.category,
+          notes: item.notes,
+          packed: item.packed === true,
+        }))
+      );
+
+    if (customError) {
+      return {
+        ok: false,
+        error:
+          customError.message ??
+          "Trip saved but custom packing items failed to transfer.",
+      };
+    }
   }
 
   return { ok: true, tripId: trip.id };

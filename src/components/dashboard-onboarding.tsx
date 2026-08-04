@@ -12,7 +12,7 @@ import {
 import { markOnboardingSeen } from "@/app/dashboard/onboarding-actions";
 
 type DashboardOnboardingProps = {
-  /** When false, forecast/packing steps re-use the New trip target with copy. */
+  /** Full 3-step tour only when the user already has at least one trip. */
   hasTrips: boolean;
 };
 
@@ -64,36 +64,42 @@ export function DashboardOnboarding({ hasTrips }: DashboardOnboardingProps) {
 
   const steps = useMemo<Step[]>(() => {
     const newTripTarget = '[data-tour="onboarding-new-trip"]';
-    const forecastTarget = hasTrips
-      ? '[data-tour="onboarding-forecast"]'
-      : newTripTarget;
-    const packingTarget = hasTrips
-      ? '[data-tour="onboarding-packing"]'
-      : newTripTarget;
+
+    // Empty dashboard: one clear CTA — do not reuse the New trip target for
+    // forecast/packing steps (that looked like the same tip repeating).
+    if (!hasTrips) {
+      return [
+        {
+          target: newTripTarget,
+          title: "Create your first trip",
+          content:
+            "Tap Create your first trip to plan a getaway and start packing smarter.",
+          placement: "bottom",
+        },
+      ];
+    }
 
     return [
       {
         target: newTripTarget,
-        title: "Create your first trip",
+        title: "New trip",
         content:
           "Click New trip to plan a getaway and start packing smarter.",
         placement: "bottom",
       },
       {
-        target: forecastTarget,
+        target: '[data-tour="onboarding-forecast"]',
         title: "Check the forecast",
-        content: hasTrips
-          ? "Weather for upcoming trips shows on each card — open a trip for the full forecast."
-          : "After you create a trip, weather for upcoming dates shows on each card and the trip page.",
-        placement: hasTrips ? "top" : "bottom",
+        content:
+          "Weather for upcoming trips shows on each card — open a trip for the full forecast.",
+        placement: "top",
       },
       {
-        target: packingTarget,
+        target: '[data-tour="onboarding-packing"]',
         title: "Get your packing list",
-        content: hasTrips
-          ? "Open a trip to see your personalized packing list and check items off as you pack."
-          : "Once you have a trip, open it to see your personalized packing list.",
-        placement: hasTrips ? "top" : "bottom",
+        content:
+          "Open a trip to see your personalized packing list and check items off as you pack.",
+        placement: "top",
       },
     ];
   }, [hasTrips]);

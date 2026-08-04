@@ -13,6 +13,7 @@ import { parsePackingItems } from "@/lib/packing";
 import {
   consumeScanCredit,
   getScanQuota,
+  refundScanCredit,
   userHasProAccessForUser,
 } from "@/lib/pro";
 import { getTripWeather } from "@/app/dashboard/weather-actions";
@@ -88,6 +89,48 @@ function extensionForMime(mime: string): string {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** Map Gemini / HTTP failures to user-safe copy; log technical details. */
+function friendlyScanError(error: unknown): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Scan failed.";
+
+  console.error("[suitcase-scan] analysis failed:", error);
+
+  const status =
+    (isRecord(error) && typeof error.status === "number" && error.status) ||
+    (isRecord(error) &&
+      isRecord(error.response) &&
+      typeof error.response.status === "number" &&
+      error.response.status) ||
+    null;
+
+  if (
+    status === 429 ||
+    /\b429\b/.test(message) ||
+    /rate.?limit|quota|resource.?exhausted/i.test(message)
+  ) {
+    return "Suitcase Snap is busy right now. Please try again in a minute.";
+  }
+
+  if (
+    (typeof status === "number" && status >= 500) ||
+    /\b5\d{2}\b/.test(message) ||
+    /internal|unavailable|overloaded|deadline|timeout/i.test(message)
+  ) {
+    return "We couldn't analyze your suitcase just now. Please try again shortly.";
+  }
+
+  return "Something went wrong analyzing your suitcase. Please try another photo.";
+}
+
 function parseSuggestions(content: string): string[] {
   let parsed: unknown;
   try {
@@ -113,8 +156,10 @@ function parseSuggestions(content: string): string[] {
 
 /**
  * Accepts FormData with `tripId` + `image` (File).
- * Verifies trip access + scan quota, uploads to private storage, analyzes with Gemini vision.
+ * Verifies trip access, atomically consumes a free-tier scan credit (if needed),
+ * uploads to private storage, then analyzes with Gemini vision.
  * Free users: 3 scans/month (profiles.scans_remaining). Pro: unlimited.
+ * On upload/Gemini failure after consume, the credit is refunded.
  */
 export async function scanSuitcase(
   formData: FormData
@@ -170,16 +215,19 @@ export async function scanSuitcase(
   }
 
   const isPro = await userHasProAccessForUser(user.id, supabase);
-  const quota = await getScanQuota(user.id, supabase);
 
-  if (!isPro && !quota.canScan) {
-    return {
-      ok: false,
-      error:
-        "You've used all 3 free suitcase scans this month. Upgrade to Pro for unlimited scans.",
-      code: "SCAN_LIMIT",
-      scansRemaining: 0,
-    };
+  // Soft UX gate — real enforcement is the atomic consume below.
+  if (!isPro) {
+    const quota = await getScanQuota(user.id, supabase);
+    if (!quota.canScan) {
+      return {
+        ok: false,
+        error:
+          "You've used all 3 free suitcase scans this month. Upgrade to Pro for unlimited scans.",
+        code: "SCAN_LIMIT",
+        scansRemaining: 0,
+      };
+    }
   }
 
   const { data: trip, error: tripError } = await supabase
@@ -191,6 +239,37 @@ export async function scanSuitcase(
   if (tripError || !trip) {
     return { ok: false, error: "Trip not found.", code: "NOT_FOUND" };
   }
+
+  // Atomic consume BEFORE upload/Gemini so concurrent requests cannot overshoot.
+  // Pro: consumeScanCredit is a no-op (unlimited). Free: RPC locks + decrements.
+  let scansRemaining: number | null = null;
+  let creditConsumed = false;
+
+  if (isPro) {
+    scansRemaining = null;
+  } else {
+    const consumed = await consumeScanCredit(user.id, supabase);
+    if (!consumed.ok) {
+      return {
+        ok: false,
+        error:
+          "You've used all 3 free suitcase scans this month. Upgrade to Pro for unlimited scans.",
+        code: "SCAN_LIMIT",
+        scansRemaining: 0,
+      };
+    }
+    creditConsumed = true;
+    scansRemaining = consumed.scansRemaining;
+  }
+
+  const refundIfNeeded = async () => {
+    if (!creditConsumed) return;
+    creditConsumed = false;
+    const refunded = await refundScanCredit(user.id, supabase);
+    if (refunded.ok) {
+      scansRemaining = refunded.scansRemaining;
+    }
+  };
 
   const buffer = Buffer.from(await image.arrayBuffer());
   const ext = extensionForMime(image.type);
@@ -205,10 +284,12 @@ export async function scanSuitcase(
     });
 
   if (uploadError) {
+    await refundIfNeeded();
     return {
       ok: false,
       error: `Upload failed: ${uploadError.message}`,
       code: "UPLOAD_FAILED",
+      scansRemaining: scansRemaining ?? undefined,
     };
   }
 
@@ -258,39 +339,38 @@ export async function scanSuitcase(
 
     content = result.response.text() || null;
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Gemini vision request failed.";
-    return { ok: false, error: message, code: "ANALYSIS_FAILED" };
+    await refundIfNeeded();
+    return {
+      ok: false,
+      error: friendlyScanError(error),
+      code: "ANALYSIS_FAILED",
+      scansRemaining: scansRemaining ?? undefined,
+    };
   }
 
   if (!content) {
+    await refundIfNeeded();
+    console.error("[suitcase-scan] empty model response");
     return {
       ok: false,
-      error: "Model returned an empty response.",
+      error:
+        "We couldn't analyze your suitcase just now. Please try again shortly.",
       code: "ANALYSIS_FAILED",
+      scansRemaining: scansRemaining ?? undefined,
     };
   }
 
   const suggestions = parseSuggestions(content);
   if (suggestions.length === 0) {
+    await refundIfNeeded();
+    console.error("[suitcase-scan] could not parse suggestions from model");
     return {
       ok: false,
-      error: "Could not parse suggestions from the model.",
+      error:
+        "We couldn't read suggestions from that scan. Please try another photo.",
       code: "PARSE_FAILED",
+      scansRemaining: scansRemaining ?? undefined,
     };
-  }
-
-  let scansRemaining: number | null = null;
-  if (isPro) {
-    scansRemaining = null;
-  } else {
-    const consumed = await consumeScanCredit(user.id, supabase);
-    if (!consumed.ok) {
-      // Analysis succeeded; still report success but surface quota error softly
-      scansRemaining = 0;
-    } else {
-      scansRemaining = consumed.scansRemaining;
-    }
   }
 
   return {

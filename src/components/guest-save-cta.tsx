@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  COOKIE_CONSENT_EVENT,
+  getCookieConsent,
+} from "@/lib/cookie-consent";
 import { cn, glassCard, travelGradient } from "@/lib/utils";
 
 type GuestSaveCtaProps = {
@@ -36,7 +41,18 @@ export function GuestSaveCta({
   packedCount,
   totalCount,
 }: GuestSaveCtaProps) {
+  // Defer until cookie consent is chosen so this CTA doesn't stack under the banner.
+  const [consentChosen, setConsentChosen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setConsentChosen(getCookieConsent() != null);
+    sync();
+    window.addEventListener(COOKIE_CONSENT_EVENT, sync);
+    return () => window.removeEventListener(COOKIE_CONSENT_EVENT, sync);
+  }, []);
+
   if (
+    !consentChosen ||
     !visible ||
     !shouldShowGuestSaveCta({
       minCheckoffs,

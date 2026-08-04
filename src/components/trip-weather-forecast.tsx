@@ -230,20 +230,28 @@ export function TripWeatherForecast({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div
-          ref={railRef}
-          className="snap-rail no-scrollbar -mx-1 flex gap-3 overflow-x-auto scroll-smooth px-1 py-1"
-          aria-label="Daily forecast"
-        >
-          {days.map((day, index) => (
-            <DayForecastCard
-              key={day.date}
-              day={day}
-              dayIndex={index}
-              highlighted={day.date === highlightDate}
-              debugCoords={debugCoords}
+        <div className="relative -mx-1">
+          <div
+            ref={railRef}
+            className="snap-rail no-scrollbar flex gap-3 overflow-x-auto scroll-smooth px-1 py-1"
+            aria-label="Daily forecast"
+          >
+            {days.map((day, index) => (
+              <DayForecastCard
+                key={day.date}
+                day={day}
+                dayIndex={index}
+                highlighted={day.date === highlightDate}
+                debugCoords={debugCoords}
+              />
+            ))}
+          </div>
+          {isOverflowing ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background to-transparent"
             />
-          ))}
+          ) : null}
         </div>
         {projectedCount > 0 ? (
           <p className="text-xs text-muted-foreground">

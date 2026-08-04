@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,7 +10,18 @@ type NewTripFabProps = {
   className?: string;
 };
 
+function shouldHideFab(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (pathname === "/dashboard/new-trip") return true;
+  return /^\/dashboard\/trips\/[^/]+\/edit\/?$/.test(pathname);
+}
+
 export function NewTripFab({ className }: NewTripFabProps) {
+  const pathname = usePathname();
+  if (shouldHideFab(pathname)) {
+    return null;
+  }
+
   return (
     <Button
       asChild

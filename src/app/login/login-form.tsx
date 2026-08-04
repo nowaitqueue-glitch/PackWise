@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -23,8 +23,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const GUEST_CLAIM_INTENT_KEY = "packwise-claim-guest";
+const GUEST_CLAIM_PATH = "/guest/claim";
+
 type LoginFormProps = {
   nextPath?: string;
+  /** Persist guest-trip claim intent across magic-link round-trips. */
+  claimGuest?: boolean;
   initialBanner?: { message: string; variant: "success" | "error" | "info" } | null;
   /** When true (e.g. `?from=signup`), title signals account creation. */
   fromSignup?: boolean;
@@ -51,6 +56,7 @@ const dividerLabelClass = cn(
 
 export function LoginForm({
   nextPath = "/dashboard",
+  claimGuest = false,
   initialBanner = null,
   fromSignup = false,
 }: LoginFormProps) {
@@ -67,8 +73,25 @@ export function LoginForm({
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
   const [banner] = useState(initialBanner);
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
+  const [resolvedNextPath, setResolvedNextPath] = useState(nextPath);
 
   const busy = magicLoading || passwordLoading || resetLoading;
+
+  useEffect(() => {
+    try {
+      if (claimGuest || nextPath === GUEST_CLAIM_PATH) {
+        sessionStorage.setItem(GUEST_CLAIM_INTENT_KEY, "1");
+        setResolvedNextPath(GUEST_CLAIM_PATH);
+        return;
+      }
+      if (sessionStorage.getItem(GUEST_CLAIM_INTENT_KEY) === "1") {
+        setResolvedNextPath(GUEST_CLAIM_PATH);
+      }
+    } catch {
+      // sessionStorage may be unavailable; fall back to prop nextPath.
+    }
+  }, [claimGuest, nextPath]);
 
   async function handleMagicLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +101,7 @@ export function LoginForm({
 
     const supabase = createClient();
     const redirectTo = new URL("/auth/callback", window.location.origin);
-    redirectTo.searchParams.set("next", nextPath);
+    redirectTo.searchParams.set("next", resolvedNextPath);
 
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
@@ -115,7 +138,18 @@ export function LoginForm({
       return;
     }
 
-    router.push(nextPath);
+    // Record that this account has a password so Settings shows Change vs Set.
+    void supabase.auth.updateUser({ data: { has_password: true } });
+
+    try {
+      if (resolvedNextPath === GUEST_CLAIM_PATH) {
+        sessionStorage.removeItem(GUEST_CLAIM_INTENT_KEY);
+      }
+    } catch {
+      // ignore
+    }
+
+    router.push(resolvedNextPath);
     router.refresh();
   }
 
@@ -254,8 +288,8 @@ export function LoginForm({
             {fromSignup ? "Welcome to PackWise" : "Sign in to PackWise"}
           </CardTitle>
           <CardDescription className="leading-relaxed">
-            Enter your email and we&apos;ll send you a magic link, or sign in with
-            your password.
+            New here? Enter your email — we&apos;ll create your account when you
+            open the magic link.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
@@ -324,72 +358,95 @@ export function LoginForm({
             </Link>
           </Button>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-white/50 dark:border-white/10" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className={dividerLabelClass}>
-                Or continue with password
-              </span>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              className="mx-auto rounded-md text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              aria-expanded={passwordExpanded}
+              aria-controls="password-sign-in"
+              onClick={() => setPasswordExpanded((open) => !open)}
+            >
+              Sign in with password
+            </button>
+
+            <div
+              id="password-sign-in"
+              className={cn(
+                "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
+                passwordExpanded
+                  ? "grid-rows-[1fr] opacity-100"
+                  : "pointer-events-none grid-rows-[0fr] opacity-0"
+              )}
+              aria-hidden={!passwordExpanded}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <form
+                  onSubmit={handlePasswordSignIn}
+                  className="flex flex-col gap-4 pt-1"
+                  ref={(node) => {
+                    if (!node) return;
+                    if (passwordExpanded) node.removeAttribute("inert");
+                    else node.setAttribute("inert", "");
+                  }}
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="password">Password</Label>
+                      <button
+                        type="button"
+                        className="rounded-md text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
+                        disabled={busy || !passwordExpanded}
+                        aria-label="Forgot password"
+                        onClick={() => void handleForgotPassword()}
+                      >
+                        {resetLoading ? "Sending…" : "Forgot password?"}
+                      </button>
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      name="password"
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                      required
+                      tabIndex={passwordExpanded ? undefined : -1}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={busy || !passwordExpanded}
+                      aria-label="Password"
+                    />
+                  </div>
+                  {passwordError ? (
+                    <p className={alertPanelClass} role="alert">
+                      {passwordError}
+                    </p>
+                  ) : null}
+                  {resetError ? (
+                    <p className={alertPanelClass} role="alert">
+                      {resetError}
+                    </p>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="lg"
+                    className="w-full"
+                    disabled={busy || !passwordExpanded}
+                    aria-label="Sign in"
+                  >
+                    {passwordLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                        Signing in…
+                      </>
+                    ) : (
+                      "Sign in"
+                    )}
+                  </Button>
+                </form>
+              </div>
             </div>
           </div>
-
-          <form onSubmit={handlePasswordSignIn} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="password">Password</Label>
-                <button
-                  type="button"
-                  className="rounded-md text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
-                  disabled={busy}
-                  aria-label="Forgot password"
-                  onClick={() => void handleForgotPassword()}
-                >
-                  {resetLoading ? "Sending…" : "Forgot password?"}
-                </button>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                name="password"
-                placeholder="Your password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={busy}
-                aria-label="Password"
-              />
-            </div>
-            {passwordError ? (
-              <p className={alertPanelClass} role="alert">
-                {passwordError}
-              </p>
-            ) : null}
-            {resetError ? (
-              <p className={alertPanelClass} role="alert">
-                {resetError}
-              </p>
-            ) : null}
-            <Button
-              type="submit"
-              variant="outline"
-              size="lg"
-              className="w-full"
-              disabled={busy}
-              aria-label="Sign in with password"
-            >
-              {passwordLoading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                  Signing in…
-                </>
-              ) : (
-                "Sign in"
-              )}
-            </Button>
-          </form>
 
           <HomeLink />
         </CardContent>

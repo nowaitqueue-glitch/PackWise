@@ -1,9 +1,15 @@
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { DashboardEmptyState } from "@/components/dashboard-empty-state";
-import { DashboardOnboarding } from "@/components/dashboard-onboarding";
+import {
+  AUTH_SERVICE_FAILURE_COOKIE,
+  AUTH_SERVICE_FAILURE_HEADER,
+  AUTH_SERVICE_FAILURE_MESSAGE,
+} from "@/lib/auth-service-failure";
 import { createClient } from "@/lib/supabase/server";
 import {
   getDashboardPackingProgressMap,
@@ -23,16 +29,24 @@ import {
 } from "@/components/ui/card";
 import { cn, glassCard, pageTitleClass, sectionTitleClass } from "@/lib/utils";
 
+const DashboardOnboarding = dynamic(() =>
+  import("@/components/dashboard-onboarding").then((m) => ({
+    default: m.DashboardOnboarding,
+  }))
+);
+
 function TripsGrid({
   trips,
   weatherByTripId,
   packingByTripId,
   completed = false,
+  chipsPending = false,
 }: {
   trips: UpcomingTrip[];
   weatherByTripId: Map<string, TripWeatherSummary>;
   packingByTripId: Map<string, TripPackingProgress>;
   completed?: boolean;
+  chipsPending?: boolean;
 }) {
   return (
     <ul className="grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -44,6 +58,7 @@ function TripsGrid({
             packing={packingByTripId.get(trip.id) ?? null}
             completed={completed}
             onboardingAnchors={!completed && index === 0}
+            chipsPending={chipsPending}
           />
         </li>
       ))}
@@ -117,12 +132,30 @@ function mapTrips(
 }
 
 export default async function DashboardPage() {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  const authServiceFailure =
+    cookieStore.get(AUTH_SERVICE_FAILURE_COOKIE)?.value === "1" ||
+    headerStore.get(AUTH_SERVICE_FAILURE_HEADER) === "1";
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
+    // Infra/auth outage: middleware already skipped the login bounce.
+    if (authServiceFailure) {
+      return (
+        <main className="relative mx-auto w-full max-w-5xl px-4 pt-8 pb-28 sm:px-6 sm:pt-10 sm:pb-12 lg:px-8">
+          <Card className={glassCard}>
+            <CardHeader>
+              <CardTitle className="text-xl">Connection trouble</CardTitle>
+              <CardDescription>{AUTH_SERVICE_FAILURE_MESSAGE}</CardDescription>
+            </CardHeader>
+          </Card>
+        </main>
+      );
+    }
     redirect("/login");
   }
 
@@ -184,6 +217,14 @@ export default async function DashboardPage() {
           "bg-white/30 dark:bg-slate-950/30"
         )}
       />
+      {authServiceFailure ? (
+        <div
+          role="status"
+          className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+        >
+          {AUTH_SERVICE_FAILURE_MESSAGE}
+        </div>
+      ) : null}
       {!hasSeenOnboarding ? (
         <DashboardOnboarding hasTrips={trips.length > 0} />
       ) : null}
@@ -217,6 +258,7 @@ export default async function DashboardPage() {
               trips={trips}
               weatherByTripId={emptyMaps.weather}
               packingByTripId={emptyMaps.packing}
+              chipsPending
             />
           }
         >
@@ -256,6 +298,7 @@ export default async function DashboardPage() {
                   weatherByTripId={emptyMaps.weather}
                   packingByTripId={emptyMaps.packing}
                   completed
+                  chipsPending
                 />
               }
             >

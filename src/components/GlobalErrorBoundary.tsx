@@ -6,31 +6,35 @@ import { Button } from "@/components/ui/button";
 import { reportError } from "@/lib/error-reporting";
 import { cn, glassCard } from "@/lib/utils";
 
-type ErrorBoundaryProps = {
+type GlobalErrorBoundaryProps = {
   children: React.ReactNode;
 };
 
-type ErrorBoundaryState = {
+type GlobalErrorBoundaryState = {
   hasError: boolean;
 };
 
-/** Nested/local boundary. Root layout uses GlobalErrorBoundary instead. */
-export class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
+/**
+ * Root React error boundary — catches render failures and shows a
+ * friendly refresh fallback. Uses reportError (edge-safe console today;
+ * Sentry-ready later). Prefer this over nesting a second ErrorBoundary.
+ */
+export class GlobalErrorBoundary extends React.Component<
+  GlobalErrorBoundaryProps,
+  GlobalErrorBoundaryState
 > {
-  constructor(props: ErrorBoundaryProps) {
+  constructor(props: GlobalErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(): ErrorBoundaryState {
+  static getDerivedStateFromError(): GlobalErrorBoundaryState {
     return { hasError: true };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     reportError(error, {
-      boundary: "ErrorBoundary",
+      boundary: "GlobalErrorBoundary",
       componentStack: errorInfo.componentStack,
     });
   }
@@ -51,11 +55,10 @@ export class ErrorBoundary extends React.Component<
               <Compass className="size-7" />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">
-              We lost the map for a second
+              Something went wrong
             </h1>
             <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-              Something went wrong on this page. Refreshing usually gets you
-              back on track.
+              Something went wrong — please refresh
             </p>
             <Button
               type="button"

@@ -12,7 +12,7 @@ import {
  * NEXT_PUBLIC_PLAUSIBLE_DOMAIN is set. Without the env var, Accept is a no-op
  * for analytics (dev logs once).
  */
-export function Analytics() {
+export function Analytics({ nonce }: { nonce?: string }) {
   const [consented, setConsented] = useState(false);
   const domain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN?.trim() || "";
 
@@ -40,6 +40,7 @@ export function Analytics() {
       data-domain={domain}
       src="https://plausible.io/js/script.js"
       strategy="afterInteractive"
+      nonce={nonce}
     />
   );
 }

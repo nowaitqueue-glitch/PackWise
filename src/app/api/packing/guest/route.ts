@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getClientIp } from "@/lib/client-ip";
 import {
   normalizePackingItemsForStorage,
   type PackingItem,
@@ -40,15 +41,6 @@ function checkRateLimit(
   }
   bucket.count += 1;
   return { allowed: true };
-}
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
 function rateLimitExceeded(retryAfterSec: number) {
@@ -158,7 +150,7 @@ function buildGuestItems(
  * Response: { items, weather }
  */
 export async function POST(request: NextRequest) {
-  const rateKey = `ip:${clientIp(request)}`;
+  const rateKey = `ip:${getClientIp(request)}`;
   const limit = checkRateLimit(rateKey);
   if (!limit.allowed) {
     return rateLimitExceeded(limit.retryAfterSec);

@@ -119,7 +119,7 @@ test.describe("PackWise packing flow", () => {
     // Safety net if consent wasn't set yet (banner mounts after useEffect).
     await dismissCookieConsentIfVisible(page, 2_000);
 
-    // Country first — city search requires a selected country.
+    // Country is optional; city stays enabled for global or country-scoped search.
     await page.getByTestId("country-combobox").click();
     await page.getByTestId("country-combobox-search").fill("France");
     await page.getByTestId("country-option-FR").click();

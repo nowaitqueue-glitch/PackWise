@@ -37,118 +37,33 @@ type UpdatePackingItemPackedResult =
   | { ok: true }
   | { ok: false; error: string };
 
-/** Known production hosts (hostname only; port ignored for these). */
-const KNOWN_APP_HOSTNAMES = new Set([
-  "packwise.app",
-  "www.packwise.app",
-]);
-
-function normalizeOrigin(value: string): string {
-  const trimmed = value.trim().replace(/\/$/, "");
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
-  }
-  return `https://${trimmed}`;
-}
-
-function parseHost(value: string): { hostname: string; host: string } | null {
-  const raw = value.split(",")[0]?.trim();
-  if (!raw) return null;
-  try {
-    const url = raw.includes("://") ? new URL(raw) : new URL(`http://${raw}`);
-    return {
-      hostname: url.hostname.toLowerCase(),
-      host: url.host.toLowerCase(),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isLoopbackHostname(hostname: string): boolean {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1"
-  );
-}
-
-/**
- * Hosts allowed for x-forwarded-host: loopback variants, known production
- * domains, and hosts derived from trusted env origins (APP_URL, VERCEL_URL, etc.).
- */
-function isAllowedForwardedHost(hostHeader: string): boolean {
-  const parsed = parseHost(hostHeader);
-  if (!parsed) return false;
-
-  if (isLoopbackHostname(parsed.hostname)) {
-    return true;
-  }
-
-  if (KNOWN_APP_HOSTNAMES.has(parsed.hostname)) {
-    return true;
-  }
-
-  const envOrigins = [
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.NEXT_PUBLIC_SITE_URL,
-    process.env.TEST_BASE_URL,
-    process.env.VERCEL_URL,
-    process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
-  ];
-
-  for (const candidate of envOrigins) {
-    if (!candidate?.trim()) continue;
-    const envHost = parseHost(candidate);
-    if (!envHost) continue;
-    if (
-      parsed.host === envHost.host ||
-      parsed.hostname === envHost.hostname
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 /**
  * Origin for internal packing kickoff.
- * Priority: NEXT_PUBLIC_APP_URL → allowlisted x-forwarded-host → localhost:3000 (dev).
+ * Priority: NEXT_PUBLIC_APP_URL (always; headers ignored) →
+ * request host / localhost:3000 (dev only).
+ * Throws in production when NEXT_PUBLIC_APP_URL is unset.
  */
 async function resolveAppOrigin(): Promise<string> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (appUrl) {
-    return normalizeOrigin(appUrl);
+    return appUrl.replace(/\/$/, "");
   }
 
-  try {
-    const headerStore = await headers();
-    const forwardedHost =
-      headerStore.get("x-forwarded-host")?.split(",")[0]?.trim();
-    if (forwardedHost && isAllowedForwardedHost(forwardedHost)) {
-      const proto =
-        headerStore.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
-        (isLoopbackHostname(parseHost(forwardedHost)?.hostname ?? "")
-          ? "http"
-          : "https");
-      return `${proto}://${forwardedHost}`;
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const headerStore = await headers();
+      const host =
+        headerStore.get("host")?.split(",")[0]?.trim() ||
+        headerStore.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+        "localhost:3000";
+      return `http://${host}`;
+    } catch {
+      // headers() unavailable outside a request context
+      return "http://localhost:3000";
     }
-  } catch {
-    // headers() unavailable outside a request context
   }
 
-  if (process.env.NODE_ENV === "development") {
-    return "http://localhost:3000";
-  }
-
-  const fromEnv =
-    process.env.TEST_BASE_URL?.trim() || process.env.VERCEL_URL?.trim();
-  if (fromEnv) {
-    return normalizeOrigin(fromEnv);
-  }
-
-  return "http://localhost:3000";
+  throw new Error("NEXT_PUBLIC_APP_URL must be set in production");
 }
 
 /**
@@ -234,9 +149,19 @@ async function upsertPackingList(
   return { error: error?.message ?? null };
 }
 
+const PACKED_UPDATE_MAX_ATTEMPTS = 5;
+
 /**
- * Updates a single item's packed flag by rewriting the items JSONB array.
- * Owner-only (RLS enforces is_trip_owner; members have read-only access).
+ * Updates a single generated item's packed flag in packing_lists.items JSONB.
+ *
+ * F6: avoids blind whole-array races by optimistic concurrency on
+ * packing_lists.updated_at — read → mutate one item → update only if
+ * updated_at still matches; retry on conflict. Custom items use the
+ * packing_custom_items row update instead (see packing-custom-actions).
+ *
+ * F7: when itemId is provided and missing, fail immediately — never fall
+ * back to itemIndex (which can toggle the wrong row after list reshuffles).
+ * Owner-only (RLS / ownership check; members have read-only access).
  */
 export async function updatePackingItemPacked(params: {
   tripId: string;
@@ -270,46 +195,81 @@ export async function updatePackingItemPacked(params: {
     };
   }
 
-  const { data: packingList, error: listError } = await supabase
-    .from("packing_lists")
-    .select("items")
-    .eq("trip_id", params.tripId)
-    .maybeSingle();
+  for (let attempt = 0; attempt < PACKED_UPDATE_MAX_ATTEMPTS; attempt++) {
+    const { data: packingList, error: listError } = await supabase
+      .from("packing_lists")
+      .select("items, updated_at")
+      .eq("trip_id", params.tripId)
+      .maybeSingle();
 
-  if (listError) {
-    return { ok: false, error: listError.message };
+    if (listError) {
+      return { ok: false, error: listError.message };
+    }
+
+    if (!packingList) {
+      return { ok: false, error: "Packing list not found." };
+    }
+
+    const items = parsePackingItems(packingList.items);
+    let index = -1;
+
+    if (params.itemId) {
+      index = items.findIndex((item) => item.id === params.itemId);
+      if (index < 0) {
+        return { ok: false, error: "Packing item not found." };
+      }
+    } else if (typeof params.itemIndex === "number") {
+      index = params.itemIndex;
+    }
+
+    if (index < 0 || index >= items.length) {
+      return { ok: false, error: "Packing item not found." };
+    }
+
+    // Already at desired packed state — treat as success (idempotent).
+    if (items[index].packed === params.packed) {
+      return { ok: true };
+    }
+
+    const nextItems = items.map((item, i) =>
+      i === index ? { ...item, packed: params.packed } : item
+    );
+    const source = parsePackingListSource(packingList.items);
+    const payload = toPackingListPayload(
+      normalizePackingItemsForStorage(nextItems),
+      source
+    );
+
+    let updateQuery = supabase
+      .from("packing_lists")
+      .update({ items: payload })
+      .eq("trip_id", params.tripId);
+
+    // Optimistic lock: only commit if nobody else wrote since we read.
+    if (typeof packingList.updated_at === "string" && packingList.updated_at) {
+      updateQuery = updateQuery.eq("updated_at", packingList.updated_at);
+    }
+
+    const { data: updated, error } = await updateQuery
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    if (updated) {
+      revalidatePath(`/dashboard/trips/${params.tripId}`);
+      return { ok: true };
+    }
+
+    // 0 rows: concurrent writer won — retry with a fresh read.
   }
 
-  if (!packingList) {
-    return { ok: false, error: "Packing list not found." };
-  }
-
-  const items = parsePackingItems(packingList.items);
-  let index = -1;
-
-  if (params.itemId) {
-    index = items.findIndex((item) => item.id === params.itemId);
-  }
-
-  if (index < 0 && typeof params.itemIndex === "number") {
-    index = params.itemIndex;
-  }
-
-  if (index < 0 || index >= items.length) {
-    return { ok: false, error: "Packing item not found." };
-  }
-
-  items[index] = { ...items[index], packed: params.packed };
-
-  const { error } = await upsertPackingList(params.tripId, items, {
-    preserveSourceFrom: packingList.items,
-  });
-  if (error) {
-    return { ok: false, error };
-  }
-
-  revalidatePath(`/dashboard/trips/${params.tripId}`);
-  return { ok: true };
+  return {
+    ok: false,
+    error: "Could not update packing item. Please try again.",
+  };
 }
 
 /**
@@ -416,7 +376,8 @@ export async function generatePackingListInBackground(
   const accessToken = session?.access_token?.trim();
 
   if (accessToken) {
-    const url = `${await resolveAppOrigin()}/api/packing/generate`;
+    const origin = await resolveAppOrigin();
+    const url = `${origin}/api/packing/generate`;
     void fetch(url, {
       method: "POST",
       headers: {

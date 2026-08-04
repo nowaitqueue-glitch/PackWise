@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import { reportError } from "@/lib/error-reporting";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 import {
   claimWebhookEvent,
@@ -24,7 +25,8 @@ import {
  *
  * Unlimited scans for Pro use profiles.is_pro (not a literal scans_month sentinel).
  *
- * Flow: verify signature → idempotency (event.id) check/insert → process.
+ * Flow: verify signature → idempotency via event.id only → process;
+ * on handler failure, delete the claim so Stripe can retry.
  */
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -47,10 +49,20 @@ export async function POST(request: Request) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Invalid webhook signature.";
-    console.error("[stripe webhook] signature verification failed:", message);
+    reportError(error, {
+      stripeWebhook: true,
+      stage: "signature_verification",
+    });
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  // Idempotency key = event.id only (no event.request.idempotency_key fallback).
+  const eventId = event.id?.trim();
+  if (!eventId) {
+    return NextResponse.json(
+      { error: "Missing webhook event id." },
+      { status: 400 }
+    );
   }
 
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -67,24 +79,13 @@ export async function POST(request: Request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Primary key: event.id; fall back to request idempotency_key only if missing.
-  const idempotencyKey =
-    event.id?.trim() || event.request?.idempotency_key?.trim() || "";
-  if (!idempotencyKey) {
-    return NextResponse.json(
-      { error: "Missing webhook event id." },
-      { status: 400 }
-    );
+  // Check webhook_events — if exists, return 200; else insert claim.
+  const claim = await claimWebhookEvent(admin, eventId);
+  if (claim === "duplicate") {
+    return NextResponse.json({ received: true });
   }
 
-  let claimed = false;
   try {
-    const claim = await claimWebhookEvent(admin, idempotencyKey);
-    if (claim === "duplicate") {
-      return NextResponse.json({ received: true });
-    }
-    claimed = true;
-
     switch (event.type) {
       case "checkout.session.completed": {
         await handleCheckoutCompleted(stripe, admin, event.data.object);
@@ -106,15 +107,20 @@ export async function POST(request: Request) {
       default:
         break;
     }
-  } catch (error) {
-    if (claimed) {
-      await releaseWebhookEvent(admin, idempotencyKey);
-    }
-    const message =
-      error instanceof Error ? error.message : "Webhook handler failed.";
-    console.error("[stripe webhook] handler error:", event.type, message);
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
 
-  return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    // DELETE FROM webhook_events WHERE stripe_event_id = event.id
+    await releaseWebhookEvent(admin, eventId);
+    reportError(error, {
+      stripeWebhook: true,
+      stage: "processing",
+      eventId,
+      eventType: event.type,
+    });
+    return NextResponse.json(
+      { error: "Webhook processing failed" },
+      { status: 500 }
+    );
+  }
 }
