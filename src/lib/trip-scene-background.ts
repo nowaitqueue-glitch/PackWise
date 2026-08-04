@@ -19,8 +19,10 @@ function normalizeCondition(condition?: string | null): string {
  * 1. Snow (incl. snow showers) → snow-bg.jpg
  * 2. Rain / drizzle / showers / thunderstorm → rainy-bg.jpg
  * 3. Clear / sunny + beach trip → beach-bg.jpg
- * 4. Business trip → city-bg.jpg
- * 5. Default → pattern.png
+ * 4. Default → pattern.png
+ *
+ * Business / city_break use CSS gradients on trip detail + cards
+ * (see `resolveTripDetailPageBackground`); they are not image scenes.
  *
  * Snow is checked before the rain family so "Snow showers" maps to snow.
  */
@@ -52,16 +54,14 @@ export function getTripSceneBackground({
     return "/images/beach-bg.jpg";
   }
 
-  if (type === "business") {
-    return "/images/city-bg.jpg";
-  }
-
   return "/images/pattern.png";
 }
 
+export type TripGradientVariant = "soft" | "business" | "city_break";
+
 export type TripDetailBackground =
   | { kind: "image"; src: string }
-  | { kind: "gradient" };
+  | { kind: "gradient"; variant: TripGradientVariant };
 
 function isRainCondition(condition: string): boolean {
   const c = normalizeCondition(condition);
@@ -89,12 +89,12 @@ function isUsableForecastCondition(condition: string): boolean {
 
 /** Stable key for crossfade / React deps. */
 export function tripDetailBackgroundKey(bg: TripDetailBackground): string {
-  return bg.kind === "gradient" ? "gradient" : bg.src;
+  return bg.kind === "gradient" ? `gradient:${bg.variant}` : bg.src;
 }
 
 /**
- * Trip detail page: scan the full forecast (when available), else fall back to trip type.
- * Priority: rain → snow → clear/sunny + beach → business → soft gradient.
+ * Trip detail page / cards: scan the full forecast (when available), else fall back to trip type.
+ * Priority: rain → snow → clear/sunny + beach → business gradient → city_break gradient → soft gradient.
  */
 export function resolveTripDetailPageBackground({
   tripType,
@@ -119,8 +119,12 @@ export function resolveTripDetailPageBackground({
   }
 
   if (type === "business") {
-    return { kind: "image", src: "/images/city-bg.jpg" };
+    return { kind: "gradient", variant: "business" };
   }
 
-  return { kind: "gradient" };
+  if (type === "city_break") {
+    return { kind: "gradient", variant: "city_break" };
+  }
+
+  return { kind: "gradient", variant: "soft" };
 }

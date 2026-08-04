@@ -43,14 +43,32 @@ function TripDetailBackgroundLayer({
   visible: boolean;
 }) {
   if (background.kind === "gradient") {
+    const gradientClass =
+      background.variant === "business"
+        ? "trip-detail-gradient-bg-business"
+        : background.variant === "city_break"
+          ? "trip-detail-gradient-bg-city-break"
+          : "trip-detail-gradient-bg motion-safe:animate-gradient-shift";
+    const showGeoGrid =
+      background.variant === "business" ||
+      background.variant === "city_break";
+
     return (
       <div
         aria-hidden
         className={cn(
-          "trip-detail-gradient-bg motion-safe:animate-gradient-shift pointer-events-none absolute inset-0 bg-cover bg-center bg-fixed max-sm:bg-scroll transition-opacity duration-700 ease-in-out",
+          "pointer-events-none absolute inset-0 bg-cover bg-center bg-fixed max-sm:bg-scroll transition-opacity duration-700 ease-in-out",
+          gradientClass,
           visible ? "opacity-100" : "opacity-0"
         )}
-      />
+      >
+        {showGeoGrid ? (
+          <div
+            aria-hidden
+            className="trip-detail-geo-grid pointer-events-none absolute inset-0"
+          />
+        ) : null}
+      </div>
     );
   }
 

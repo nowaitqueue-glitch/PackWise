@@ -84,12 +84,18 @@ export function DeleteTripButton({
             variant="destructiveGhost"
             size="icon"
             className={cn(
-              "group absolute top-3 right-3 z-10 h-11 w-11 min-h-11 min-w-11 rounded-full p-1.5 [&_svg]:size-7",
+              // Above the trip-card full-bleed Link (z-[1]); keep hit target ≥44px.
+              "pointer-events-auto group absolute top-3 right-3 z-10 h-11 w-11 min-h-11 min-w-11 rounded-full p-1.5 [&_svg]:size-7",
               className
             )}
             aria-label="Delete trip"
+            onPointerDown={(event) => {
+              // Stop the overlay Link from seeing the gesture.
+              event.stopPropagation();
+            }}
             onClick={(event) => {
-              event.preventDefault();
+              // Do not preventDefault — Radix AlertDialogTrigger skips open
+              // when the composed click sees event.defaultPrevented.
               event.stopPropagation();
             }}
           >

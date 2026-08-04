@@ -139,6 +139,58 @@
     will-change: background-position;
   }
 
+  /* Premium business: cool slate/blue wash (light) ↔ deep corporate (dark). */
+  .trip-detail-gradient-bg-business {
+    background-image: linear-gradient(
+      to bottom right,
+      #f1f5f9,
+      #eff6ff,
+      #e5e7eb
+    );
+  }
+
+  .dark .trip-detail-gradient-bg-business {
+    background-image: linear-gradient(
+      to bottom right,
+      #0f172a,
+      #172554,
+      #1e293b
+    );
+  }
+
+  /* City break: soft violet/indigo (light) ↔ night urban purple/navy (dark). */
+  .trip-detail-gradient-bg-city-break {
+    background-image: linear-gradient(
+      to bottom right,
+      #ede9fe,
+      #e0e7ff,
+      #e2e8f0
+    );
+  }
+
+  .dark .trip-detail-gradient-bg-city-break {
+    background-image: linear-gradient(
+      to bottom right,
+      #3b0764,
+      #1e1b4b,
+      #0f172a
+    );
+  }
+
+  /* Low-opacity geometric grid for business / city_break polish. */
+  .trip-detail-geo-grid {
+    background-image:
+      linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .dark .trip-detail-geo-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  }
+
   @keyframes packing-check-bounce {
     0%,
     100% {
