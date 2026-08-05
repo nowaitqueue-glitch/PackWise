@@ -118,7 +118,13 @@ export function WeatherConditionIcon({
 
   return (
     <Icon
-      className={cn(motion, pulse, className)}
+      className={cn(
+        // Default stroke color so Lucide icons stay visible when callers omit text-*.
+        "text-foreground dark:text-slate-100",
+        motion,
+        pulse,
+        className
+      )}
       aria-hidden
       {...props}
     />

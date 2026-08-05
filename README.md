@@ -68,14 +68,18 @@ Do not paste placeholder strings (`YOUR_KEY`, `your-anon-key`) into Production s
 After changing env vars, **redeploy** so the new values are picked up.
 
 Also set Supabase Auth URLs for production (Authentication → URL Configuration).
-Use your real Vercel / custom domain from the Vercel dashboard (Project → Domains) — do not invent a hostname:
+Use your real Vercel / custom domain from the Vercel dashboard (Project → Domains) — do not invent a hostname.
 
-- **Site URL**: `https://<your-production-domain>`
-- **Redirect URLs** (add each that applies; `**` covers `?next=/dashboard` and guest claim):
-  - `https://<your-production-domain>/auth/callback`
-  - `https://<your-production-domain>/auth/callback**`
-  - `https://<your-production-domain>/reset-password`
-  - Preview deploys (optional): `https://*-<your-vercel-team>.vercel.app/auth/callback**`
+Magic links use `emailRedirectTo: window.location.origin` (bare origin, no `/auth/callback` path). The landing page detects `?code=` and forwards to `/auth/callback` for a cookie-safe exchange. Allowlist **bare origins** plus `/**`:
+
+- **Site URL**: `https://<your-production-domain>` (e.g. `https://packwise.app` if that is your custom domain)
+- **Redirect URLs** (add each that applies):
+  - `https://<your-production-domain>`
+  - `https://<your-production-domain>/**` (covers `/?code=…`, `/auth/callback`, `/reset-password`, guest claim)
+  - Preview deploy (example — use your actual preview host):
+    - `https://packwise2026-bndidqy68-nowaitqueue-7040s-projects.vercel.app`
+    - `https://packwise2026-bndidqy68-nowaitqueue-7040s-projects.vercel.app/**`
+  - Optional preview wildcard: `https://*-<your-vercel-team>.vercel.app/**`
 
 If `NEXT_PUBLIC_APP_URL` is set in Vercel, it must be that same production origin (no trailing slash). Magic-link `emailRedirectTo` uses the browser origin at send time; a mismatched Site URL / allowlist still causes failed or wrong redirects.
 
@@ -86,11 +90,11 @@ If `NEXT_PUBLIC_APP_URL` is set in Vercel, it must be that same production origi
 1. **Authentication** → **Providers** → enable **Email** / magic link (OTP).
 2. **Authentication** → **URL Configuration**:
    - Local **Site URL**: `http://localhost:3000` (or `http://localhost:3001` if that port is what `npm run dev` uses)
-   - **Redirect URLs** (local):
-     - `http://localhost:3000/auth/callback`
-     - `http://localhost:3000/auth/callback**`
-     - `http://localhost:3000/reset-password`
-     - If you use port 3001: the same three patterns with `http://localhost:3001/...`
+   - **Redirect URLs** (local) — bare origin + `/**` (magic links land on `/` with `?code=`):
+     - `http://localhost:3000`
+     - `http://localhost:3000/**`
+     - If you use port 3001: `http://localhost:3001` and `http://localhost:3001/**`
+     - Optional explicit paths still fine: `/auth/callback`, `/reset-password`
 
 
 ### Migrations (apply in order)

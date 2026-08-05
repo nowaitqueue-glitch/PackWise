@@ -132,17 +132,21 @@ export function TripCard({
             {weather ? (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm",
-                  glassChip
+                  "inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium shadow-sm",
+                  glassChip,
+                  // Stronger fill than default glassChip so copy stays readable over trip photos.
+                  "bg-white/90 text-foreground dark:bg-slate-950/90 dark:text-slate-100"
                 )}
                 title={`High ${weather.highTemp}° / low ${weather.lowTemp}°`}
               >
                 <WeatherConditionIcon
                   condition={weather.condition}
-                  className="size-3.5 shrink-0"
+                  className="size-3.5 shrink-0 text-foreground dark:text-slate-100"
                 />
-                <span className="tabular-nums">{weather.highTemp}°</span>
-                <span className="capitalize text-muted-foreground">
+                <span className="font-semibold tabular-nums text-foreground dark:text-slate-50">
+                  {weather.highTemp}°
+                </span>
+                <span className="capitalize text-slate-600 dark:text-slate-300">
                   {weather.condition}
                 </span>
               </span>

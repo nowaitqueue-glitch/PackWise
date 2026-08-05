@@ -52,6 +52,21 @@ type TripSuitcaseScanProps = {
   packedCount?: number;
 };
 
+const CAMERA_DENIED_MESSAGE =
+  "Camera access is blocked. Allow the camera in your browser settings to use Suitcase Snap.";
+
+function triggerFilePicker(input: HTMLInputElement) {
+  try {
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+  } catch {
+    // showPicker requires a transient user activation; fall back to click.
+  }
+  input.click();
+}
+
 export function TripSuitcaseScan({
   tripId,
   isPro,
@@ -69,6 +84,8 @@ export function TripSuitcaseScan({
   const [isAnalyzingOverlay, setIsAnalyzingOverlay] = useState(false);
   const [addedAll, setAddedAll] = useState(false);
   const [expanded, setExpanded] = useState(packedCount >= 1);
+  /** Cached so openCamera can stay synchronous and keep the user gesture. */
+  const [cameraDenied, setCameraDenied] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isCheckoutPending, startCheckout] = useTransition();
   const [isAddAllPending, startAddAll] = useTransition();
@@ -79,6 +96,50 @@ export function TripSuitcaseScan({
     }
   }, [packedCount]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let permissionStatus: PermissionStatus | null = null;
+
+    function syncDenied(state: PermissionState) {
+      if (!cancelled) {
+        setCameraDenied(state === "denied");
+      }
+    }
+
+    void (async () => {
+      if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+        return;
+      }
+      try {
+        permissionStatus = await navigator.permissions.query({
+          name: "camera" as PermissionName,
+        });
+        if (cancelled) return;
+        syncDenied(permissionStatus.state);
+        permissionStatus.onchange = () => {
+          syncDenied(permissionStatus!.state);
+        };
+      } catch {
+        // Unsupported — leave cameraDenied false and let capture proceed.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (permissionStatus) {
+        permissionStatus.onchange = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const outOfScans = !isPro && scansRemaining <= 0;
   const showAnalyzing = isAnalyzingOverlay || isPending;
 
@@ -87,7 +148,32 @@ export function TripSuitcaseScan({
       setUpgradeOpen(true);
       return;
     }
-    inputRef.current?.click();
+
+    const input = inputRef.current;
+    if (!input) {
+      showBanner({
+        message: "Couldn't open the camera. Please try again.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (cameraDenied) {
+      showBanner({ message: CAMERA_DENIED_MESSAGE, variant: "error" });
+      // Still allow a library photo when live capture is blocked.
+      input.removeAttribute("capture");
+      triggerFilePicker(input);
+      window.setTimeout(() => {
+        input.setAttribute("capture", "environment");
+      }, 0);
+      return;
+    }
+
+    // Synchronous trigger preserves the user gesture for capture / file picker.
+    if (!input.getAttribute("capture")) {
+      input.setAttribute("capture", "environment");
+    }
+    triggerFilePicker(input);
   }
 
   function handleUpgradeClick() {
@@ -267,10 +353,13 @@ export function TripSuitcaseScan({
       <CardContent className="relative z-10 flex flex-col gap-4">
         <input
           ref={inputRef}
+          id="suitcase-snap-capture"
           type="file"
           accept="image/*"
           capture="environment"
           className="sr-only"
+          tabIndex={-1}
+          aria-hidden
           onChange={handleFileChange}
           disabled={isPending || outOfScans}
         />
@@ -315,10 +404,13 @@ export function TripSuitcaseScan({
 
         {previewUrl ? (
           <div className="relative overflow-hidden rounded-xl border border-white/40 shadow-md dark:border-white/10">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- blob/object URL from file input */}
             <img
               src={previewUrl}
               alt="Suitcase preview"
+              width={1120}
+              height={448}
+              decoding="async"
               className="max-h-56 w-full object-cover"
             />
             {showAnalyzing ? (

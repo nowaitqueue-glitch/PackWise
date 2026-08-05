@@ -3,7 +3,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { cn, glassCard, pageTitleClass } from "@/lib/utils";
 
 export const metadata = {
-  title: "Privacy Policy · PackWise",
+  title: "Privacy Policy",
   description: "How PackWise handles your data.",
 };
 

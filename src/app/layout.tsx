@@ -6,6 +6,7 @@ import { Analytics } from "@/components/analytics";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { ThemeProvider } from "@/components/theme-provider";
+import { getSiteUrl } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -21,12 +22,17 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+const siteUrl = getSiteUrl();
+const siteDescription =
+  "PackWise builds weather-aware packing lists for every trip — share with friends and scan your suitcase so nothing gets left behind.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: "PackWise",
     template: "%s · PackWise",
   },
-  description: "Smart packing lists for every trip",
+  description: siteDescription,
   applicationName: "PackWise",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -42,6 +48,29 @@ export const metadata: Metadata = {
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "PackWise",
+    title: "PackWise",
+    description: siteDescription,
+    // Prefer a dedicated 1200×630 og-image.png when available; icon is a safe fallback.
+    images: [
+      {
+        url: "/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "PackWise",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "PackWise",
+    description: siteDescription,
+    images: ["/icon-512.png"],
   },
 };
 

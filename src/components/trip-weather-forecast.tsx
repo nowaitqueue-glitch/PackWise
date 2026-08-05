@@ -72,24 +72,28 @@ function DayForecastCard({
       className={cn(
         "flex min-w-[8.5rem] shrink-0 flex-col items-center gap-2 px-3 py-4 text-center sm:min-w-[9.5rem]",
         solidContentCard,
+        // Opaque enough that forecast type stays legible over scenic trip backdrops.
+        "bg-white/95 dark:bg-gray-950/95",
         glassCardHover,
         highlighted && "border-primary/50 ring-2 ring-primary/30",
-        projected && "border-dashed opacity-80"
+        // Dashed border marks projection without dimming all text via opacity.
+        projected && "border-dashed"
       )}
     >
       <div className="flex flex-col items-center">
-        <p className="text-sm font-semibold tracking-tight text-foreground">
+        <p className="text-sm font-semibold tracking-tight text-foreground dark:text-slate-100">
           {formatWeekday(day.date)}
         </p>
-        <p className="text-xs tabular-nums text-muted-foreground">
+        <p className="text-xs tabular-nums text-slate-600 dark:text-slate-300">
           {formatShortDate(day.date)}
         </p>
       </div>
 
       <span
         className={cn(
-          "px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground",
-          glassChip
+          "px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300",
+          glassChip,
+          "bg-white/90 dark:bg-slate-950/90"
         )}
       >
         Day {dayIndex + 1}
@@ -98,17 +102,21 @@ function DayForecastCard({
       <WeatherConditionIcon
         condition={day.condition}
         iconCode={day.icon}
-        className="h-8 w-8 text-foreground"
+        className="h-8 w-8 text-foreground dark:text-slate-100"
       />
 
-      <p className="line-clamp-2 text-xs capitalize text-muted-foreground">
+      <p className="line-clamp-2 text-xs capitalize text-slate-600 dark:text-slate-300">
         {day.condition}
       </p>
 
       <p className="flex items-baseline gap-1 text-base tabular-nums">
-        <span className="font-bold text-foreground">{day.highTemp}°</span>
-        <span className="text-muted-foreground">/</span>
-        <span className="text-sm text-muted-foreground">{day.lowTemp}°</span>
+        <span className="font-bold text-foreground dark:text-slate-50">
+          {day.highTemp}°
+        </span>
+        <span className="text-slate-500 dark:text-slate-400">/</span>
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          {day.lowTemp}°
+        </span>
       </p>
 
       <p className="flex items-center gap-1 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300">
@@ -118,7 +126,7 @@ function DayForecastCard({
       </p>
 
       {debugCoords ? (
-        <p className="font-mono text-[9px] leading-tight text-muted-foreground/70">
+        <p className="font-mono text-[9px] leading-tight text-slate-500 dark:text-slate-400">
           {debugCoords.lat.toFixed(4)},{debugCoords.lon.toFixed(4)}
         </p>
       ) : null}
@@ -128,13 +136,22 @@ function DayForecastCard({
 
 function WeatherUnavailableCard({ message }: { message?: string }) {
   return (
-    <Card className={cn("w-full", solidContentCard, glassCardHover)}>
+    <Card
+      className={cn(
+        "w-full",
+        solidContentCard,
+        "bg-white/95 dark:bg-gray-950/95",
+        glassCardHover
+      )}
+    >
       <CardHeader>
         <CardTitle className={sectionTitleClass}>Weather forecast</CardTitle>
-        <CardDescription>Destination forecast</CardDescription>
+        <CardDescription className="text-slate-600 dark:text-slate-300">
+          Destination forecast
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
           {message ?? "Weather data temporarily unavailable"}
         </p>
       </CardContent>
@@ -205,12 +222,19 @@ export function TripWeatherForecast({
       : null;
 
   return (
-    <Card className={cn("w-full", solidContentCard, glassCardHover)}>
+    <Card
+      className={cn(
+        "w-full",
+        solidContentCard,
+        "bg-white/95 dark:bg-gray-950/95",
+        glassCardHover
+      )}
+    >
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 space-y-1">
             <CardTitle className={sectionTitleClass}>Weather forecast</CardTitle>
-            <CardDescription>
+            <CardDescription className="text-slate-600 dark:text-slate-300">
               {locationName}
               {projectedCount > 0
                 ? " · Later days use seasonal averages"
@@ -220,8 +244,9 @@ export function TripWeatherForecast({
           {isOverflowing ? (
             <p
               className={cn(
-                "shrink-0 px-2.5 py-1 text-xs font-medium text-muted-foreground",
-                glassChip
+                "shrink-0 px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-slate-300",
+                glassChip,
+                "bg-white/90 dark:bg-slate-950/90"
               )}
             >
               swipe →
@@ -254,13 +279,13 @@ export function TripWeatherForecast({
           ) : null}
         </div>
         {projectedCount > 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
             Showing {forecastCount} forecast day
             {forecastCount === 1 ? "" : "s"} and {projectedCount} projected day
             {projectedCount === 1 ? "" : "s"} across {tripDayCount} trip days.
           </p>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
             {forecastCount}-day forecast across {tripDayCount} trip day
             {tripDayCount === 1 ? "" : "s"}.
           </p>
