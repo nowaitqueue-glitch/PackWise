@@ -57,6 +57,59 @@ const dividerLabelClass = cn(
 const mutedLinkClass =
   "rounded-md text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline dark:text-slate-300 dark:hover:text-white";
 
+const NETWORK_ERROR_MESSAGE =
+  "Couldn't connect. Please check your internet and try again.";
+
+function isNetworkAuthError(error: unknown): boolean {
+  if (!error) return false;
+  const message =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === "object" &&
+            "message" in error &&
+            typeof (error as { message: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : "";
+  const name =
+    error instanceof Error
+      ? error.name
+      : typeof error === "object" &&
+          "name" in error &&
+          typeof (error as { name: unknown }).name === "string"
+        ? (error as { name: string }).name
+        : "";
+
+  if (name === "TypeError" && /fetch|network/i.test(message)) return true;
+  if (/failed to fetch|networkerror|load failed|network request failed|fetch failed|econnrefused|enotfound|etimedout|aborterror/i.test(message)) {
+    return true;
+  }
+  return false;
+}
+
+function mapAuthError(error: unknown): string {
+  console.error("[login] auth error", error);
+  if (isNetworkAuthError(error)) return NETWORK_ERROR_MESSAGE;
+  if (
+    typeof error === "object" &&
+    error &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  if (error instanceof Error) return error.message;
+  return "Something went wrong. Please try again.";
+}
+
+/** Prefer NEXT_PUBLIC_APP_URL (trim trailing slash); else window origin. */
+function clientAppOrigin(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  return window.location.origin;
+}
+
 export function LoginForm({
   nextPath = "/dashboard",
   claimGuest = false,
@@ -96,64 +149,76 @@ export function LoginForm({
     }
   }, [claimGuest, nextPath]);
 
-  async function handleMagicLink(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleMagicLink(event?: React.FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     setMagicLoading(true);
     setMagicError(null);
     setPasswordError(null);
 
-    const supabase = createClient();
-    const redirectTo = new URL("/auth/callback", window.location.origin);
-    redirectTo.searchParams.set("next", resolvedNextPath);
+    try {
+      const supabase = createClient();
+      const origin = clientAppOrigin();
+      const redirectTo = new URL("/auth/callback", origin);
+      redirectTo.searchParams.set("next", resolvedNextPath);
 
-    const { error: signInError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: redirectTo.toString(),
-      },
-    });
+      const { error: signInError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectTo.toString(),
+        },
+      });
 
-    setMagicLoading(false);
+      if (signInError) {
+        setMagicError(mapAuthError(signInError));
+        return;
+      }
 
-    if (signInError) {
-      setMagicError(signInError.message);
-      return;
+      setSent(true);
+    } catch (error) {
+      setMagicError(mapAuthError(error));
+    } finally {
+      setMagicLoading(false);
     }
-
-    setSent(true);
   }
 
-  async function handlePasswordSignIn(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handlePasswordSignIn(
+    event?: React.FormEvent<HTMLFormElement>
+  ) {
+    event?.preventDefault();
     setPasswordLoading(true);
     setPasswordError(null);
     setMagicError(null);
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInError) {
-      setPasswordLoading(false);
-      setPasswordError(signInError.message);
-      return;
-    }
-
-    // Record that this account has a password so Settings shows Change vs Set.
-    void supabase.auth.updateUser({ data: { has_password: true } });
-
     try {
-      if (resolvedNextPath === GUEST_CLAIM_PATH) {
-        sessionStorage.removeItem(GUEST_CLAIM_INTENT_KEY);
-      }
-    } catch {
-      // ignore
-    }
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    router.push(resolvedNextPath);
-    router.refresh();
+      if (signInError) {
+        setPasswordLoading(false);
+        setPasswordError(mapAuthError(signInError));
+        return;
+      }
+
+      // Record that this account has a password so Settings shows Change vs Set.
+      void supabase.auth.updateUser({ data: { has_password: true } });
+
+      try {
+        if (resolvedNextPath === GUEST_CLAIM_PATH) {
+          sessionStorage.removeItem(GUEST_CLAIM_INTENT_KEY);
+        }
+      } catch {
+        // ignore
+      }
+
+      router.push(resolvedNextPath);
+      router.refresh();
+    } catch (error) {
+      setPasswordLoading(false);
+      setPasswordError(mapAuthError(error));
+    }
   }
 
   async function handleForgotPassword() {
@@ -169,27 +234,33 @@ export function LoginForm({
     }
 
     setResetLoading(true);
-    const supabase = createClient();
-    // Prefer /reset-password as redirectTo (user request). With PKCE the link
-    // lands as /reset-password?code=… and the reset page exchanges the code.
-    // Also add this URL (and Site URL) in Supabase Auth → Redirect URLs.
-    const redirectTo = `${window.location.origin}/reset-password`;
+    try {
+      const supabase = createClient();
+      // Prefer /reset-password as redirectTo (user request). With PKCE the link
+      // lands as /reset-password?code=… and the reset page exchanges the code.
+      // Also add this URL (and Site URL) in Supabase Auth → Redirect URLs
+      // (include http://localhost:3000 and :3001 if you use either port).
+      const redirectTo = `${clientAppOrigin()}/reset-password`;
 
-    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
-      trimmed,
-      { redirectTo }
-    );
-    setResetLoading(false);
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+        trimmed,
+        { redirectTo }
+      );
 
-    if (resetErr) {
-      setResetError(resetErr.message);
-      return;
+      if (resetErr) {
+        setResetError(mapAuthError(resetErr));
+        return;
+      }
+
+      setResetSent(true);
+      setResetSuccess(
+        `If an account exists for ${trimmed}, we sent a password reset link.`
+      );
+    } catch (error) {
+      setResetError(mapAuthError(error));
+    } finally {
+      setResetLoading(false);
     }
-
-    setResetSent(true);
-    setResetSuccess(
-      `If an account exists for ${trimmed}, we sent a password reset link.`
-    );
   }
 
   if (sent) {
@@ -324,9 +395,21 @@ export function LoginForm({
               />
             </div>
             {magicError ? (
-              <p className={alertPanelClass} role="alert">
-                {magicError}
-              </p>
+              <div className="flex flex-col gap-2" role="alert">
+                <p className={alertPanelClass}>{magicError}</p>
+                {magicError === NETWORK_ERROR_MESSAGE ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={busy}
+                    aria-label="Retry sending magic link"
+                    onClick={() => void handleMagicLink()}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
             <Button
               type="submit"
@@ -423,14 +506,38 @@ export function LoginForm({
                     />
                   </div>
                   {passwordError ? (
-                    <p className={alertPanelClass} role="alert">
-                      {passwordError}
-                    </p>
+                    <div className="flex flex-col gap-2" role="alert">
+                      <p className={alertPanelClass}>{passwordError}</p>
+                      {passwordError === NETWORK_ERROR_MESSAGE ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          disabled={busy || !passwordExpanded}
+                          aria-label="Retry password sign in"
+                          onClick={() => void handlePasswordSignIn()}
+                        >
+                          Try again
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : null}
                   {resetError ? (
-                    <p className={alertPanelClass} role="alert">
-                      {resetError}
-                    </p>
+                    <div className="flex flex-col gap-2" role="alert">
+                      <p className={alertPanelClass}>{resetError}</p>
+                      {resetError === NETWORK_ERROR_MESSAGE ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          disabled={busy || !passwordExpanded}
+                          aria-label="Retry password reset"
+                          onClick={() => void handleForgotPassword()}
+                        >
+                          Try again
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : null}
                   <Button
                     type="submit"

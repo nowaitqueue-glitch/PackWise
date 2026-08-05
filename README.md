@@ -78,8 +78,9 @@ Also set Supabase Auth URLs for production:
 
 1. **Authentication** → **Providers** → enable **Email** / magic link (OTP).
 2. **Authentication** → **URL Configuration**:
-   - Local **Site URL**: `http://localhost:3000`
-   - **Redirect URLs**: `http://localhost:3000/auth/callback`
+   - Local **Site URL**: `http://localhost:3000` (or `http://localhost:3001` if that port is what `npm run dev` uses)
+   - **Redirect URLs**: `http://localhost:3000/auth/callback` and, if you use another port, `http://localhost:3001/auth/callback` (plus `/reset-password` for password reset)
+
 
 ### Migrations (apply in order)
 
