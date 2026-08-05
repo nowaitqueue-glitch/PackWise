@@ -67,10 +67,17 @@ Do not paste placeholder strings (`YOUR_KEY`, `your-anon-key`) into Production s
 
 After changing env vars, **redeploy** so the new values are picked up.
 
-Also set Supabase Auth URLs for production:
+Also set Supabase Auth URLs for production (Authentication → URL Configuration).
+Use your real Vercel / custom domain from the Vercel dashboard (Project → Domains) — do not invent a hostname:
 
-- **Site URL**: `https://your-app.vercel.app` (or custom domain)
-- **Redirect URLs**: `https://your-app.vercel.app/auth/callback` (and Preview URLs if you use them)
+- **Site URL**: `https://<your-production-domain>`
+- **Redirect URLs** (add each that applies; `**` covers `?next=/dashboard` and guest claim):
+  - `https://<your-production-domain>/auth/callback`
+  - `https://<your-production-domain>/auth/callback**`
+  - `https://<your-production-domain>/reset-password`
+  - Preview deploys (optional): `https://*-<your-vercel-team>.vercel.app/auth/callback**`
+
+If `NEXT_PUBLIC_APP_URL` is set in Vercel, it must be that same production origin (no trailing slash). Magic-link `emailRedirectTo` uses the browser origin at send time; a mismatched Site URL / allowlist still causes failed or wrong redirects.
 
 ## Supabase setup
 
@@ -79,7 +86,11 @@ Also set Supabase Auth URLs for production:
 1. **Authentication** → **Providers** → enable **Email** / magic link (OTP).
 2. **Authentication** → **URL Configuration**:
    - Local **Site URL**: `http://localhost:3000` (or `http://localhost:3001` if that port is what `npm run dev` uses)
-   - **Redirect URLs**: `http://localhost:3000/auth/callback` and, if you use another port, `http://localhost:3001/auth/callback` (plus `/reset-password` for password reset)
+   - **Redirect URLs** (local):
+     - `http://localhost:3000/auth/callback`
+     - `http://localhost:3000/auth/callback**`
+     - `http://localhost:3000/reset-password`
+     - If you use port 3001: the same three patterns with `http://localhost:3001/...`
 
 
 ### Migrations (apply in order)

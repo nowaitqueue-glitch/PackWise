@@ -103,11 +103,19 @@ function mapAuthError(error: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
-/** Prefer NEXT_PUBLIC_APP_URL (trim trailing slash); else window origin. */
+/**
+ * Origin for auth email redirects. Prefer the live browser origin so magic
+ * links return to the host the user is on (avoids 404s when
+ * NEXT_PUBLIC_APP_URL points at a stale/wrong deploy). Fall back to
+ * NEXT_PUBLIC_APP_URL only if window is unavailable.
+ */
 function clientAppOrigin(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  return window.location.origin;
+  return "";
 }
 
 export function LoginForm({
