@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { CloudSun, ListChecks, ScanLine, Users2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingBackground } from "@/components/landing-background";
+import { MagicLinkLandingHandler } from "@/components/magic-link-landing-handler";
 import { PageTransition } from "@/components/page-transition";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +62,9 @@ export default async function HomePage({
   return (
     <PageTransition>
       <div className="relative min-h-screen">
+        <Suspense fallback={null}>
+          <MagicLinkLandingHandler />
+        </Suspense>
         {/* Full-bleed hero plane behind sticky header + first viewport */}
         <div
           aria-hidden

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Briefcase, Loader2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { AUTH_NEXT_STORAGE_KEY } from "@/lib/auth-next";
 import {
   cn,
   glassCard,
@@ -165,14 +166,18 @@ export function LoginForm({
 
     try {
       const supabase = createClient();
-      const origin = clientAppOrigin();
-      const redirectTo = new URL("/auth/callback", origin);
-      redirectTo.searchParams.set("next", resolvedNextPath);
+      // Magic links land on `/` with `?code=…`; the landing page forwards to
+      // /auth/callback. Persist `next` because emailRedirectTo is origin-only.
+      try {
+        sessionStorage.setItem(AUTH_NEXT_STORAGE_KEY, resolvedNextPath);
+      } catch {
+        // sessionStorage may be unavailable
+      }
 
       const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: redirectTo.toString(),
+          emailRedirectTo: window.location.origin,
         },
       });
 
