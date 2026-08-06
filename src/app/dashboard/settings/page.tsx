@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -12,13 +13,43 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/components/LogoutButton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn, glassCard, pageTitleClass, sectionTitleClass } from "@/lib/utils";
-import { DeleteAccountButton } from "./delete-account-button";
 import { SettingsAccount, SettingsPassword } from "./settings-account";
-import { SettingsAppearance } from "./settings-appearance";
-import { SettingsNotifications } from "./settings-notifications";
-import { SettingsPrivacy } from "./settings-privacy";
+
+/** Eager: Account + Password (default panel). Lazy: heavier below-the-fold sections. */
+const SettingsNotifications = dynamic(
+  () =>
+    import("./settings-notifications").then((m) => ({
+      default: m.SettingsNotifications,
+    })),
+  { loading: () => <Skeleton className="h-24 w-full" /> }
+);
+
+const SettingsAppearance = dynamic(
+  () =>
+    import("./settings-appearance").then((m) => ({
+      default: m.SettingsAppearance,
+    })),
+  { loading: () => <Skeleton className="h-28 w-full" /> }
+);
+
+const SettingsPrivacy = dynamic(
+  () =>
+    import("./settings-privacy").then((m) => ({
+      default: m.SettingsPrivacy,
+    })),
+  { loading: () => <Skeleton className="h-24 w-full" /> }
+);
+
+const DeleteAccountButton = dynamic(
+  () =>
+    import("./delete-account-button").then((m) => ({
+      default: m.DeleteAccountButton,
+    })),
+  { loading: () => <Skeleton className="h-10 w-40" /> }
+);
 
 function SettingsSection({
   icon: Icon,

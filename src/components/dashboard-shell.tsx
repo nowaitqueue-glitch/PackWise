@@ -26,7 +26,9 @@ export function DashboardShell({
       )}
     >
       {!isTripDetail ? <DashboardAmbientBackground /> : null}
-      <div className="relative z-10">{children}</div>
+      <div id="main-content" className="relative z-10" tabIndex={-1}>
+        {children}
+      </div>
     </div>
   );
 }

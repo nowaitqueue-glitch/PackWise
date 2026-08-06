@@ -54,23 +54,22 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: siteUrl,
     siteName: "PackWise",
-    title: "PackWise",
+    title: "PackWise — Pack smarter for every trip",
     description: siteDescription,
-    // Prefer a dedicated 1200×630 og-image.png when available; icon is a safe fallback.
     images: [
       {
-        url: "/icon-512.png",
-        width: 512,
-        height: 512,
-        alt: "PackWise",
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "PackWise — Pack smarter for every trip",
       },
     ],
   },
   twitter: {
-    card: "summary",
-    title: "PackWise",
+    card: "summary_large_image",
+    title: "PackWise — Pack smarter for every trip",
     description: siteDescription,
-    images: ["/icon-512.png"],
+    images: ["/og-image.png"],
   },
 };
 
@@ -101,6 +100,12 @@ export default function RootLayout({
           "min-h-screen font-sans text-base leading-relaxed antialiased"
         )}
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring dark:focus:bg-card"
+        >
+          Skip to content
+        </a>
         <div className="relative min-h-screen">
           {/* Soft travel-toned wash + repeating pattern behind every page. */}
           <div

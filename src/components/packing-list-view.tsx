@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import confetti from "canvas-confetti";
 import {
   Loader2,
   Pencil,
@@ -125,16 +124,21 @@ function markCelebrated(key: string): void {
   }
 }
 
+const loadConfetti = () =>
+  import("canvas-confetti").then((m) => m.default);
+
 function firePackingConfetti(): void {
-  void confetti({
-    particleCount: 64,
-    spread: 58,
-    startVelocity: 28,
-    gravity: 0.9,
-    scalar: 0.85,
-    ticks: 120,
-    origin: { x: 0.5, y: 0.35 },
-    colors: ["#3b82f6", "#2dd4bf", "#60a5fa", "#5eead4", "#ffffff"],
+  void loadConfetti().then((confetti) => {
+    confetti({
+      particleCount: 64,
+      spread: 58,
+      startVelocity: 28,
+      gravity: 0.9,
+      scalar: 0.85,
+      ticks: 120,
+      origin: { x: 0.5, y: 0.35 },
+      colors: ["#3b82f6", "#2dd4bf", "#60a5fa", "#5eead4", "#ffffff"],
+    });
   });
 }
 

@@ -99,95 +99,99 @@ export default async function HomePage({
           </div>
         </header>
 
-        <div className="relative">
-          <section className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col justify-center px-4 pb-16 pt-12 sm:px-6 sm:pb-24 sm:pt-16">
-            {accountDeleted ? (
-              <div
-                role="status"
-                className={cn(
-                  glassCard,
-                  "mb-8 max-w-2xl px-4 py-3 text-sm text-foreground"
-                )}
-              >
-                Your PackWise account and data have been permanently deleted.
-              </div>
-            ) : null}
+        <main id="main-content">
+          <div className="relative">
+            <section className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col justify-center px-4 pb-16 pt-12 sm:px-6 sm:pb-24 sm:pt-16">
+              {accountDeleted ? (
+                <div
+                  role="status"
+                  className={cn(
+                    glassCard,
+                    "mb-8 max-w-2xl px-4 py-3 text-sm text-foreground"
+                  )}
+                >
+                  Your PackWise account and data have been permanently deleted.
+                </div>
+              ) : null}
 
-            <div className="max-w-2xl">
-              <h1 className="text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
-                <span className={travelGradientText}>PackWise</span>
-              </h1>
-              <p className="mt-4 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                Pack smarter for every trip
-              </p>
-              <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Weather-aware packing lists tuned to your destination and forecast.
-                Share your list so friends can see what you’re bringing, and scan
-                your suitcase before you leave.
-              </p>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                {user ? (
-                  <Button asChild size="lg">
-                    <Link href="/dashboard">Go to dashboard</Link>
-                  </Button>
-                ) : (
-                  <>
+              <div className="max-w-2xl">
+                <h1 className="text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
+                  <span className={travelGradientText}>PackWise</span>
+                </h1>
+                <p className="mt-4 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  Pack smarter for every trip
+                </p>
+                <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+                  Weather-aware packing lists tuned to your destination and
+                  forecast. Share your list so friends can see what you’re
+                  bringing, and scan your suitcase before you leave.
+                </p>
+                <div className="mt-8 flex flex-wrap items-center gap-3">
+                  {user ? (
                     <Button asChild size="lg">
-                      <Link href="/login?from=signup">Get Started</Link>
+                      <Link href="/dashboard">Go to dashboard</Link>
                     </Button>
-                    <Button asChild size="lg" variant="secondary">
-                      <Link href="/dashboard/guest">Try as Guest</Link>
-                    </Button>
-                  </>
-                )}
+                  ) : (
+                    <>
+                      <Button asChild size="lg">
+                        <Link href="/login?from=signup">Get Started</Link>
+                      </Button>
+                      <Button asChild size="lg" variant="secondary">
+                        <Link href="/dashboard/guest">Try as Guest</Link>
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Magic-link sign-in. Works as a Progressive Web App on your
+                  phone.
+                </p>
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Magic-link sign-in. Works as a Progressive Web App on your phone.
-              </p>
-            </div>
-          </section>
-        </div>
+            </section>
+          </div>
 
-        <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6">
-          <section className="border-t border-border/60 pt-12 sm:pt-16">
-            <h2 className={cn(sectionTitleClass, "sm:text-2xl")}>
-              Everything you need before you go
-            </h2>
-            <p className="mt-2 max-w-xl text-base leading-relaxed text-muted-foreground">
-              From first draft to last checkoff — packing without the spreadsheet.
-            </p>
-            <ul className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-2">
-              {features.map((feature) => {
-                const Icon = feature.icon;
-                return (
-                  <li
-                    key={feature.title}
-                    className={cn(glassCard, glassCardHover, "p-5 sm:p-6")}
-                  >
-                    <div className="flex items-start gap-4">
-                      <span className={featureIconClass} aria-hidden>
-                        <Icon className="size-5" />
-                      </span>
-                      <div className="min-w-0 space-y-1.5">
-                        <h3 className="text-base font-bold tracking-tight text-foreground">
-                          {feature.title}
-                        </h3>
-                        <p className="text-sm leading-relaxed text-muted-foreground">
-                          {feature.description}
-                        </p>
+          <div className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6">
+            <section className="border-t border-border/60 pt-12 sm:pt-16">
+              <h2 className={cn(sectionTitleClass, "sm:text-2xl")}>
+                Everything you need before you go
+              </h2>
+              <p className="mt-2 max-w-xl text-base leading-relaxed text-muted-foreground">
+                From first draft to last checkoff — packing without the
+                spreadsheet.
+              </p>
+              <ul className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-2">
+                {features.map((feature) => {
+                  const Icon = feature.icon;
+                  return (
+                    <li
+                      key={feature.title}
+                      className={cn(glassCard, glassCardHover, "p-5 sm:p-6")}
+                    >
+                      <div className="flex items-start gap-4">
+                        <span className={featureIconClass} aria-hidden>
+                          <Icon className="size-5" />
+                        </span>
+                        <div className="min-w-0 space-y-1.5">
+                          <h3 className="text-base font-bold tracking-tight text-foreground">
+                            {feature.title}
+                          </h3>
+                          <p className="text-sm leading-relaxed text-muted-foreground">
+                            {feature.description}
+                          </p>
                           {"plannedLabel" in feature ? (
-                          <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
-                            <span>{feature.plannedLabel}</span>
-                            <Badge variant="secondary">Coming soon</Badge>
-                          </div>
-                        ) : null}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+                              <span>{feature.plannedLabel}</span>
+                              <Badge variant="secondary">Coming soon</Badge>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          </div>
         </main>
 
         <footer className="relative z-10 border-t border-border/60 bg-background/80 py-8 backdrop-blur-sm">

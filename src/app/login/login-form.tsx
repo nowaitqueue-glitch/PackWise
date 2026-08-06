@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { Briefcase, Loader2, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_NEXT_STORAGE_KEY } from "@/lib/auth-next";
+import { reportError } from "@/lib/error-reporting";
 import {
   cn,
   glassCard,
@@ -19,7 +19,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,11 +35,9 @@ type LoginFormProps = {
   fromSignup?: boolean;
 };
 
-const cardMotion = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const },
-};
+/** Fade/slide-in via CSS — avoids pulling framer-motion into the login bundle. */
+const cardEnterClass =
+  "mx-4 w-full max-w-sm animate-in fade-in-0 slide-in-from-bottom-3 duration-500 fill-mode-both";
 
 const iconTileClass = cn("mb-2 size-14 rounded-2xl", brandIconTile);
 
@@ -90,7 +87,7 @@ function isNetworkAuthError(error: unknown): boolean {
 }
 
 function mapAuthError(error: unknown): string {
-  console.error("[login] auth error", error);
+  reportError(error, { context: "login" });
   if (isNetworkAuthError(error)) return NETWORK_ERROR_MESSAGE;
   if (
     typeof error === "object" &&
@@ -278,18 +275,15 @@ export function LoginForm({
 
   if (sent) {
     return (
-      <motion.div
-        className="mx-4 w-full max-w-sm"
-        {...cardMotion}
-      >
+      <div className={cardEnterClass}>
         <Card className={cn("w-full", glassCard)}>
           <CardHeader className="items-center text-center">
             <div className={iconTileClass} aria-hidden>
               <Mail className="size-7" />
             </div>
-            <CardTitle className="text-xl">
+            <h1 className="text-xl font-bold leading-tight tracking-tight text-card-foreground">
               Check your email for the magic link!
-            </CardTitle>
+            </h1>
             <CardDescription
               role="status"
               className={cn(infoPanelClass, "mt-2 w-full leading-relaxed")}
@@ -317,22 +311,21 @@ export function LoginForm({
             <HomeLink />
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
     );
   }
 
   if (resetSent) {
     return (
-      <motion.div
-        className="mx-4 w-full max-w-sm"
-        {...cardMotion}
-      >
+      <div className={cardEnterClass}>
         <Card className={cn("w-full", glassCard)}>
           <CardHeader className="items-center text-center">
             <div className={iconTileClass} aria-hidden>
               <Mail className="size-7" />
             </div>
-            <CardTitle className="text-xl">Check your email</CardTitle>
+            <h1 className="text-xl font-bold leading-tight tracking-tight text-card-foreground">
+              Check your email
+            </h1>
             <CardDescription
               role="status"
               className={cn(infoPanelClass, "mt-2 w-full leading-relaxed")}
@@ -357,23 +350,20 @@ export function LoginForm({
             <HomeLink />
           </CardContent>
         </Card>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      className="mx-4 w-full max-w-sm"
-      {...cardMotion}
-    >
+    <div className={cardEnterClass}>
       <Card className={cn("w-full", glassCard)}>
         <CardHeader className="items-center text-center">
           <div className={iconTileClass} aria-hidden>
             <Briefcase className="size-7" />
           </div>
-          <CardTitle className="text-2xl text-card-foreground">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-card-foreground">
             {fromSignup ? "Welcome to PackWise" : "Sign in to PackWise"}
-          </CardTitle>
+          </h1>
           <CardDescription className="leading-relaxed text-muted-foreground dark:text-slate-300">
             New here? Enter your email — we&apos;ll create your account when you
             open the magic link.
@@ -576,7 +566,7 @@ export function LoginForm({
           <HomeLink />
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   );
 }
 
