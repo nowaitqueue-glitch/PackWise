@@ -10,6 +10,13 @@ export type DeleteTripResult =
   | { ok: true }
   | { ok: false; error: string };
 
+export type DeleteTripsResult = {
+  ok: boolean;
+  deletedIds: string[];
+  failedIds: string[];
+  error?: string;
+};
+
 type StorageListClient = {
   storage: {
     from: (bucket: string) => {
@@ -20,6 +27,8 @@ type StorageListClient = {
     };
   };
 };
+
+type AuthedSupabase = Awaited<ReturnType<typeof createClient>>;
 
 function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -68,20 +77,11 @@ async function removeSuitcaseScansForTrip(
   }
 }
 
-/**
- * Deletes a trip owned by the current user. Related DB rows cascade via FKs;
- * suitcase-scan objects in Storage are removed explicitly.
- */
-export async function deleteTrip(tripId: string): Promise<DeleteTripResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { ok: false, error: "You must be signed in." };
-  }
-
+async function deleteOwnedTrip(
+  supabase: AuthedSupabase,
+  userId: string,
+  tripId: string
+): Promise<DeleteTripResult> {
   const { data: trip, error: tripError } = await supabase
     .from("trips")
     .select("id, user_id")
@@ -93,7 +93,7 @@ export async function deleteTrip(tripId: string): Promise<DeleteTripResult> {
   }
 
   // Double-check ownership beyond RLS (delete policy is already owner-only).
-  if (trip.user_id !== user.id) {
+  if (trip.user_id !== userId) {
     return { ok: false, error: "Only the trip owner can delete this trip." };
   }
 
@@ -121,14 +121,89 @@ export async function deleteTrip(tripId: string): Promise<DeleteTripResult> {
     .from("trips")
     .delete()
     .eq("id", tripId)
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   if (deleteError) {
     return { ok: false, error: deleteError.message };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Deletes a trip owned by the current user. Related DB rows cascade via FKs;
+ * suitcase-scan objects in Storage are removed explicitly.
+ */
+export async function deleteTrip(tripId: string): Promise<DeleteTripResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const result = await deleteOwnedTrip(supabase, user.id, tripId);
+  if (!result.ok) {
+    return result;
   }
 
   revalidatePath("/dashboard");
   revalidatePath(`/dashboard/trips/${tripId}`);
 
   return { ok: true };
+}
+
+/**
+ * Batch-deletes trips owned by the current user. Non-owned / missing ids are
+ * reported in `failedIds` without aborting the rest.
+ */
+export async function deleteTrips(
+  tripIds: string[]
+): Promise<DeleteTripsResult> {
+  const uniqueIds = Array.from(new Set(tripIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    return { ok: true, deletedIds: [], failedIds: [] };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      deletedIds: [],
+      failedIds: uniqueIds,
+      error: "You must be signed in.",
+    };
+  }
+
+  const deletedIds: string[] = [];
+  const failedIds: string[] = [];
+  let firstError: string | undefined;
+
+  for (const tripId of uniqueIds) {
+    const result = await deleteOwnedTrip(supabase, user.id, tripId);
+    if (result.ok) {
+      deletedIds.push(tripId);
+      revalidatePath(`/dashboard/trips/${tripId}`);
+    } else {
+      failedIds.push(tripId);
+      firstError ??= result.error;
+    }
+  }
+
+  if (deletedIds.length > 0) {
+    revalidatePath("/dashboard");
+  }
+
+  return {
+    ok: failedIds.length === 0,
+    deletedIds,
+    failedIds,
+    error: firstError,
+  };
 }

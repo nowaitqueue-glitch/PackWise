@@ -34,6 +34,13 @@ type DeleteTripButtonProps = {
   variant?: "outline";
   /** Where to navigate after a successful delete (trip detail → dashboard). */
   redirectTo?: string;
+  /**
+   * Dashboard optimistic UI: close dialog, fade the card out, and hide it
+   * from the local list. Skips `router.refresh()` on success.
+   */
+  onOptimisticRemove?: () => void;
+  /** Restore the card if the server delete fails after optimistic remove. */
+  onOptimisticRestore?: () => void;
   className?: string;
 };
 
@@ -43,6 +50,8 @@ export function DeleteTripButton({
   appearance = "icon",
   variant,
   redirectTo,
+  onOptimisticRemove,
+  onOptimisticRestore,
   className,
 }: DeleteTripButtonProps) {
   const resolvedAppearance =
@@ -119,18 +128,28 @@ export function DeleteTripButton({
             disabled={isPending}
             onClick={() => {
               startTransition(async () => {
+                const useOptimistic = Boolean(onOptimisticRemove);
+                if (useOptimistic) {
+                  // Close first so the card fade-out is visible behind the dialog.
+                  setOpen(false);
+                  onOptimisticRemove?.();
+                }
                 const result = await deleteTrip(tripId);
                 if (!result.ok) {
+                  onOptimisticRestore?.();
                   showBanner({ message: result.error, variant: "error" });
                   return;
                 }
-                setOpen(false);
+                if (!useOptimistic) {
+                  setOpen(false);
+                }
                 showBanner({ message: "Trip deleted.", variant: "success" });
                 if (redirectTo) {
                   router.push(redirectTo);
-                } else {
+                } else if (!useOptimistic) {
                   router.refresh();
                 }
+                // Optimistic dashboard path: revalidatePath soft-syncs; no full refresh flash.
               });
             }}
           >

@@ -116,6 +116,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Empty water bottle (reusable, collapsible)",
     category: "In-Flight",
     tags: ["mandatory", "flight"],
+    affiliateLink: "https://www.amazon.com/s?k=reusable+water+bottle&tag=packwise-placeholder",
     notes: "Fill after security",
   },
   {
@@ -146,6 +147,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Eye mask",
     category: "In-Flight",
     tags: ["longFlight"],
+    affiliateLink: "https://www.amazon.com/s?k=eye+mask&tag=packwise-placeholder",
     notes: "For sleeping on long flights",
   },
   {

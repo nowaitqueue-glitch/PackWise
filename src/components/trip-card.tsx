@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarDays, Check, MapPin, Users } from "lucide-react";
 import { DeleteTripButton } from "@/components/delete-trip-button";
 import { DuplicateTripButton } from "@/components/duplicate-trip-button";
 import { WeatherConditionIcon } from "@/components/weather-condition-icon";
@@ -66,6 +66,17 @@ type TripCardProps = {
   onboardingAnchors?: boolean;
   /** Suspense/streaming: show chip skeletons while weather/packing resolve. */
   chipsPending?: boolean;
+  /** Fade-out in progress (dashboard optimistic delete). */
+  isRemoving?: boolean;
+  /** Start list fade-out / optimistic hide (dashboard grid). */
+  onOptimisticRemove?: () => void;
+  /** Undo optimistic hide if the server delete fails. */
+  onOptimisticRestore?: () => void;
+  /** Dashboard multi-select mode. */
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  /** When set, card tap toggles selection instead of navigating. */
+  onToggleSelect?: () => void;
 };
 
 export function TripCard({
@@ -75,17 +86,36 @@ export function TripCard({
   completed = false,
   onboardingAnchors = false,
   chipsPending = false,
+  isRemoving = false,
+  onOptimisticRemove,
+  onOptimisticRestore,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
 }: TripCardProps) {
   const showPacking = packing != null && packing.total > 0;
+  const selectable = isSelectionMode && Boolean(onToggleSelect);
+  const selectLabel = isSelected
+    ? `Deselect trip to ${trip.destination}`
+    : `Select trip to ${trip.destination}`;
 
   return (
     <Card
       className={cn(
-        "relative flex h-full cursor-pointer flex-col overflow-hidden",
+        "relative flex h-full cursor-pointer flex-col overflow-hidden transition-[box-shadow,border-color,transform,opacity] duration-300 ease-out",
         glassCard,
-        glassCardHover,
-        completed && "opacity-75"
+        !isSelectionMode && glassCardHover,
+        completed && !isRemoving && "opacity-75",
+        isRemoving && "pointer-events-none",
+        isSelectionMode &&
+          "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
+        isSelected &&
+          "border-brand-from/50 ring-2 ring-brand-from/40 dark:border-brand-from/40 dark:ring-brand-from/30",
+        isSelectionMode &&
+          !selectable &&
+          "cursor-default opacity-60"
       )}
+      aria-hidden={isRemoving || undefined}
       data-tour={onboardingAnchors ? "onboarding-packing" : undefined}
     >
       <TripBackgroundMorph
@@ -99,16 +129,54 @@ export function TripCard({
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-gradient-to-t from-white/90 via-white/70 to-white/30 dark:from-slate-950/90 dark:via-slate-950/70 dark:to-slate-950/35"
       />
-      <Link
-        href={`/dashboard/trips/${trip.id}`}
-        className="absolute inset-0 z-[1] rounded-[inherit]"
-        aria-label={`Open trip to ${trip.destination}`}
-      />
-      <DeleteTripButton tripId={trip.id} isOwner={trip.isOwner} />
+      {selectable ? (
+        <button
+          type="button"
+          className="absolute inset-0 z-[1] rounded-[inherit]"
+          aria-label={selectLabel}
+          aria-pressed={isSelected}
+          onClick={onToggleSelect}
+        />
+      ) : !isSelectionMode ? (
+        <Link
+          href={`/dashboard/trips/${trip.id}`}
+          className="absolute inset-0 z-[1] rounded-[inherit]"
+          aria-label={`Open trip to ${trip.destination}`}
+        />
+      ) : null}
+      {isSelectionMode ? (
+        <span
+          className={cn(
+            "pointer-events-none absolute top-3 left-3 z-10 flex size-11 items-center justify-center",
+            "motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200"
+          )}
+          aria-hidden
+        >
+          <span
+            className={cn(
+              "grid size-6 place-content-center rounded-full border-2 shadow-sm backdrop-blur-sm transition-all",
+              isSelected
+                ? "border-transparent bg-gradient-to-br from-brand-from to-brand-to text-white"
+                : "border-brand-from/50 bg-white/80 dark:bg-slate-900/70",
+              !selectable && "opacity-40"
+            )}
+          >
+            {isSelected ? <Check className="size-3.5" strokeWidth={3} /> : null}
+          </span>
+        </span>
+      ) : (
+        <DeleteTripButton
+          tripId={trip.id}
+          isOwner={trip.isOwner}
+          onOptimisticRemove={onOptimisticRemove}
+          onOptimisticRestore={onOptimisticRestore}
+        />
+      )}
       <CardHeader
         className={cn(
           "pointer-events-none relative z-[1] space-y-2 p-5 pb-3",
-          trip.isOwner && "pr-11"
+          trip.isOwner && !isSelectionMode && "pr-11",
+          isSelectionMode && "pl-14"
         )}
       >
         <div className="flex items-start justify-between gap-2">
@@ -194,7 +262,12 @@ export function TripCard({
           />
         ) : null}
       </CardContent>
-      <CardFooter className="relative z-[1] flex flex-wrap gap-2 p-5 pt-0">
+      <CardFooter
+        className={cn(
+          "relative z-[1] flex flex-wrap gap-2 p-5 pt-0",
+          isSelectionMode && "pointer-events-none opacity-50"
+        )}
+      >
         <DuplicateTripButton tripId={trip.id} />
       </CardFooter>
     </Card>

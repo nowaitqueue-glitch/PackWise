@@ -32,6 +32,7 @@ type ReminderResult = {
     | "skipped_fully_packed"
     | "skipped_no_email"
     | "skipped_opted_out"
+    | "skipped_dry_run"
     | "failed_missing_resend_key"
     | "failed_email"
     | "failed_log";
@@ -168,6 +169,9 @@ function escapeHtml(value: string): string {
  *
  * Auth (Vercel cron pattern):
  *   Authorization: Bearer <CRON_SECRET>
+ *
+ * Local dry-run (still requires auth; no claim / no Resend send):
+ *   GET /api/cron/packing-reminders?dryRun=1
  */
 export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET?.trim()) {
@@ -180,6 +184,12 @@ export async function GET(request: NextRequest) {
   if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
+
+  const dryRunParam = request.nextUrl.searchParams.get("dryRun");
+  const dryRun =
+    dryRunParam === "1" ||
+    dryRunParam?.toLowerCase() === "true" ||
+    dryRunParam?.toLowerCase() === "yes";
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -194,6 +204,7 @@ export async function GET(request: NextRequest) {
     );
     return NextResponse.json({
       ok: true,
+      dryRun,
       targetStartDate,
       reminderDate,
       results: [] as ReminderResult[],
@@ -230,6 +241,7 @@ export async function GET(request: NextRequest) {
   if (candidates.length === 0) {
     return NextResponse.json({
       ok: true,
+      dryRun,
       targetStartDate,
       reminderDate,
       count: 0,
@@ -346,6 +358,18 @@ export async function GET(request: NextRequest) {
 
       if (!email) {
         results.push({ ...base, email: null, status: "skipped_no_email" });
+        continue;
+      }
+
+      if (dryRun) {
+        console.log(
+          `[cron/packing-reminders] dryRun - would email ${email} for trip ${trip.id} (${trip.destination})`
+        );
+        results.push({
+          ...base,
+          email,
+          status: "skipped_dry_run",
+        });
         continue;
       }
 
@@ -474,6 +498,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    dryRun,
     targetStartDate,
     reminderDate,
     count: results.length,

@@ -19,7 +19,16 @@ import {
   getDashboardTripWeatherMap,
   type TripWeatherSummary,
 } from "@/lib/trip-weather-cache";
-import { TripCard, type UpcomingTrip } from "@/components/trip-card";
+import { type UpcomingTrip } from "@/components/trip-card";
+import {
+  TripsBatchActionBar,
+  TripsSelectToggle,
+} from "@/components/trips-batch-bar";
+import {
+  TripsGrid,
+  TripsListProvider,
+  TripsOptimisticProvider,
+} from "@/components/trips-grid";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -34,37 +43,6 @@ const DashboardOnboarding = dynamic(() =>
     default: m.DashboardOnboarding,
   }))
 );
-
-function TripsGrid({
-  trips,
-  weatherByTripId,
-  packingByTripId,
-  completed = false,
-  chipsPending = false,
-}: {
-  trips: UpcomingTrip[];
-  weatherByTripId: Map<string, TripWeatherSummary>;
-  packingByTripId: Map<string, TripPackingProgress>;
-  completed?: boolean;
-  chipsPending?: boolean;
-}) {
-  return (
-    <ul className="grid gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {trips.map((trip, index) => (
-        <li key={trip.id}>
-          <TripCard
-            trip={trip}
-            weather={weatherByTripId.get(trip.id) ?? null}
-            packing={packingByTripId.get(trip.id) ?? null}
-            completed={completed}
-            onboardingAnchors={!completed && index === 0}
-            chipsPending={chipsPending}
-          />
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * Streams weather chips + packing progress into the trip grid. Cache lookups
@@ -81,15 +59,15 @@ async function TripsGridWithExtras({
 }) {
   const supabase = await createClient();
   const tripIds = trips.map((trip) => trip.id);
-  const [weatherByTripId, packingByTripId] = await Promise.all([
+  const [weatherMap, packingMap] = await Promise.all([
     getDashboardTripWeatherMap(supabase, trips),
     getDashboardPackingProgressMap(supabase, tripIds),
   ]);
   return (
     <TripsGrid
       trips={trips}
-      weatherByTripId={weatherByTripId}
-      packingByTripId={packingByTripId}
+      weatherByTripId={Object.fromEntries(weatherMap)}
+      packingByTripId={Object.fromEntries(packingMap)}
       completed={completed}
     />
   );
@@ -193,6 +171,10 @@ export default async function DashboardPage() {
   const trips = mapTrips(upcomingData, user.id);
   const pastTrips = mapTrips(pastData, user.id);
   const error = upcomingError ?? pastError;
+  const ownedUpcomingIds = trips
+    .filter((trip) => trip.isOwner)
+    .map((trip) => trip.id);
+  const hasSelectableTrips = ownedUpcomingIds.length > 0;
 
   // Skip tour if the flag can't be read (e.g. migration not applied yet).
   const hasSeenOnboarding =
@@ -203,10 +185,28 @@ export default async function DashboardPage() {
             ?.has_seen_onboarding
         );
 
-  const emptyMaps = {
-    weather: new Map<string, TripWeatherSummary>(),
-    packing: new Map<string, TripPackingProgress>(),
+  const emptyExtras = {
+    weather: {} as Record<string, TripWeatherSummary>,
+    packing: {} as Record<string, TripPackingProgress>,
   };
+
+  const upcomingGrid =
+    trips.length === 0 ? (
+      <DashboardEmptyState />
+    ) : (
+      <Suspense
+        fallback={
+          <TripsGrid
+            trips={trips}
+            weatherByTripId={emptyExtras.weather}
+            packingByTripId={emptyExtras.packing}
+            chipsPending
+          />
+        }
+      >
+        <TripsGridWithExtras trips={trips} />
+      </Suspense>
+    );
 
   return (
     <main className="relative mx-auto w-full max-w-5xl px-4 pt-8 pb-28 sm:px-6 sm:pt-10 sm:pb-12 lg:px-8">
@@ -228,42 +228,56 @@ export default async function DashboardPage() {
       {!hasSeenOnboarding ? (
         <DashboardOnboarding hasTrips={trips.length > 0} />
       ) : null}
-      <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1.5">
-          <h1 className={pageTitleClass}>Upcoming trips</h1>
-          <p className="max-w-prose text-sm text-muted-foreground sm:text-base">
-            Trips you own or that were shared with you, sorted by start date.
-          </p>
-        </div>
-        <Button asChild className="hidden shrink-0 sm:inline-flex">
-          <Link href="/dashboard/new-trip" data-tour="onboarding-new-trip">
-            Create a new trip
-          </Link>
-        </Button>
-      </div>
 
       {error ? (
-        <Card className={glassCard}>
-          <CardHeader>
-            <CardTitle className="text-xl">Could not load trips</CardTitle>
-            <CardDescription>{error.message}</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : trips.length === 0 ? (
-        <DashboardEmptyState />
+        <>
+          <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1.5">
+              <h1 className={pageTitleClass}>Upcoming trips</h1>
+              <p className="max-w-prose text-sm text-muted-foreground sm:text-base">
+                Trips you own or that were shared with you, sorted by start
+                date.
+              </p>
+            </div>
+            <Button asChild className="hidden shrink-0 sm:inline-flex">
+              <Link href="/dashboard/new-trip" data-tour="onboarding-new-trip">
+                Create a new trip
+              </Link>
+            </Button>
+          </div>
+          <Card className={glassCard}>
+            <CardHeader>
+              <CardTitle className="text-xl">Could not load trips</CardTitle>
+              <CardDescription>{error.message}</CardDescription>
+            </CardHeader>
+          </Card>
+        </>
       ) : (
-        <Suspense
-          fallback={
-            <TripsGrid
-              trips={trips}
-              weatherByTripId={emptyMaps.weather}
-              packingByTripId={emptyMaps.packing}
-              chipsPending
-            />
-          }
-        >
-          <TripsGridWithExtras trips={trips} />
-        </Suspense>
+        <TripsListProvider ownedTripIds={ownedUpcomingIds}>
+          <div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1.5">
+              <h1 className={pageTitleClass}>Upcoming trips</h1>
+              <p className="max-w-prose text-sm text-muted-foreground sm:text-base">
+                Trips you own or that were shared with you, sorted by start
+                date.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {hasSelectableTrips ? <TripsSelectToggle /> : null}
+              <Button asChild className="hidden shrink-0 sm:inline-flex">
+                <Link
+                  href="/dashboard/new-trip"
+                  data-tour="onboarding-new-trip"
+                >
+                  Create a new trip
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {upcomingGrid}
+          <TripsBatchActionBar />
+        </TripsListProvider>
       )}
 
       {!error && pastTrips.length > 0 ? (
@@ -291,19 +305,25 @@ export default async function DashboardPage() {
             />
           </summary>
           <div className="mt-4">
-            <Suspense
-              fallback={
-                <TripsGrid
-                  trips={pastTrips}
-                  weatherByTripId={emptyMaps.weather}
-                  packingByTripId={emptyMaps.packing}
-                  completed
-                  chipsPending
-                />
-              }
+            <TripsOptimisticProvider
+              ownedTripIds={pastTrips
+                .filter((trip) => trip.isOwner)
+                .map((trip) => trip.id)}
             >
-              <TripsGridWithExtras trips={pastTrips} completed />
-            </Suspense>
+              <Suspense
+                fallback={
+                  <TripsGrid
+                    trips={pastTrips}
+                    weatherByTripId={emptyExtras.weather}
+                    packingByTripId={emptyExtras.packing}
+                    completed
+                    chipsPending
+                  />
+                }
+              >
+                <TripsGridWithExtras trips={pastTrips} completed />
+              </Suspense>
+            </TripsOptimisticProvider>
           </div>
         </details>
       ) : null}
