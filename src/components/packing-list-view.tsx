@@ -5,11 +5,11 @@ import {
   Loader2,
   Pencil,
   Plus,
-  ShoppingBag,
   Trash2,
   X,
 } from "lucide-react";
 import { usePillBanner } from "@/components/pill-banner-provider";
+import { ShopEssentialsCard } from "@/components/shop-essentials-card";
 import {
   groupPackingItemsByCategory,
   packingProgress,
@@ -519,7 +519,8 @@ export function PackingListView({
                             </span>
                           ) : null}
                         </label>
-                        {item.affiliateLink ? (
+                        {/* Individual affiliate icons disabled — using single curated list instead */}
+                        {/* {item.affiliateLink ? (
                           <a
                             href={item.affiliateLink}
                             target="_blank"
@@ -531,7 +532,8 @@ export function PackingListView({
                             <ShoppingBag className="size-3.5" aria-hidden />
                             Buy
                           </a>
-                        ) : null}
+                        ) : null} */}
+
                         {canManageCustom && item.isCustom ? (
                           <div className="flex shrink-0 items-center gap-0.5">
                             <Button
@@ -600,6 +602,8 @@ export function PackingListView({
           )}
         </PackingPanel>
       ) : null}
+
+      <ShopEssentialsCard />
     </div>
   );
 }

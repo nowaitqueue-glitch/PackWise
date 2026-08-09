@@ -220,6 +220,9 @@ export default async function HomePage({
               </Link>
             </div>
           </div>
+          <p className="mx-auto mt-4 max-w-5xl px-4 text-center text-xs text-muted-foreground sm:px-6">
+            As an Amazon Associate, PackWise earns from qualifying purchases.
+          </p>
         </footer>
       </div>
     </PageTransition>
