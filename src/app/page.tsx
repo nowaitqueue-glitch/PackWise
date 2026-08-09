@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { CloudSun, ListChecks, ScanLine, Users2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingBackground } from "@/components/landing-background";
-import { MagicLinkLandingHandler } from "@/components/magic-link-landing-handler";
 import { PageTransition } from "@/components/page-transition";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -41,10 +39,11 @@ const features = [
     plannedLabel: "Live collaborative check-offs",
   },
   {
-    title: "Suitcase scan",
+    title: "Suitcase Snap",
     icon: ScanLine,
     description:
-      "Snap what is already packed and PackWise suggests what is missing — 3 free scans per month, unlimited on Pro.",
+      "Coming soon — AI-powered suitcase scanning. Snap a photo and we'll tell you what you're forgetting.",
+    badge: "Pro Feature — Coming Soon",
   },
 ] as const;
 
@@ -62,9 +61,6 @@ export default async function HomePage({
   return (
     <PageTransition>
       <div className="relative min-h-screen">
-        <Suspense fallback={null}>
-          <MagicLinkLandingHandler />
-        </Suspense>
         {/* Full-bleed hero plane behind sticky header + first viewport */}
         <div
           aria-hidden
@@ -122,9 +118,8 @@ export default async function HomePage({
                   Pack smarter for every trip
                 </p>
                 <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                  Weather-aware packing lists tuned to your destination and
-                  forecast. Share your list so friends can see what you’re
-                  bringing, and scan your suitcase before you leave.
+                  Create trips, get weather-smart packing lists, check off items
+                  as you pack, and revisit past trips anytime.
                 </p>
                 <div className="mt-8 flex flex-wrap items-center gap-3">
                   {user ? (
@@ -143,8 +138,8 @@ export default async function HomePage({
                   )}
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Magic-link sign-in. Works as a Progressive Web App on your
-                  phone.
+                  Email, password, or Google sign-in. Works as a Progressive Web
+                  App on your phone.
                 </p>
               </div>
             </section>
@@ -172,9 +167,14 @@ export default async function HomePage({
                           <Icon className="size-5" />
                         </span>
                         <div className="min-w-0 space-y-1.5">
-                          <h3 className="text-base font-bold tracking-tight text-foreground">
-                            {feature.title}
-                          </h3>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-base font-bold tracking-tight text-foreground">
+                              {feature.title}
+                            </h3>
+                            {"badge" in feature ? (
+                              <Badge variant="pro">{feature.badge}</Badge>
+                            ) : null}
+                          </div>
                           <p className="text-sm leading-relaxed text-muted-foreground">
                             {feature.description}
                           </p>

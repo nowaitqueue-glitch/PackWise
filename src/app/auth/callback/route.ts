@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { reportError } from "@/lib/error-reporting";
 
 /**
  * Resolve the public origin for post-auth redirects.
@@ -27,15 +28,18 @@ function safeNextPath(raw: string | null): string {
   return "/dashboard";
 }
 
+/**
+ * Server PKCE exchange for OAuth and email confirmation redirects that target
+ * `/auth/callback` (Google OAuth, signup confirmation, optional recovery with
+ * `next=`). Cookie writes bind to the redirect response via `@supabase/ssr`
+ * createServerClient — not deprecated auth-helpers.
+ */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = safeNextPath(searchParams.get("next"));
   const origin = resolveOrigin(request);
 
-  // Supports magic-link sign-in and password-recovery when redirectTo is
-  // `/auth/callback?next=/reset-password` (alternative to landing on
-  // `/reset-password?code=…` directly).
   if (code) {
     // Bind cookie writes to the redirect response (same pattern as
     // /api/test/login). Using cookies() from next/headers alone can drop
@@ -45,6 +49,9 @@ export async function GET(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !anonKey) {
+      reportError(new Error("Missing Supabase env in auth callback"), {
+        source: "auth-callback",
+      });
       return NextResponse.redirect(`${origin}/login?error=auth`);
     }
 
@@ -65,6 +72,12 @@ export async function GET(request: NextRequest) {
     if (!error) {
       return response;
     }
+
+    reportError(error, {
+      source: "auth-callback",
+      phase: "exchangeCodeForSession",
+      next,
+    });
   }
 
   if (next === "/reset-password") {

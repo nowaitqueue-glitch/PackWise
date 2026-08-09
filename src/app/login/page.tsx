@@ -49,7 +49,7 @@ function bannerFromParams(
   }
   if (searchParams.error === "auth") {
     return {
-      message: "Sign-in link was invalid or expired. Try again.",
+      message: "Sign-in failed or expired. Please try again.",
       variant: "error",
     };
   }

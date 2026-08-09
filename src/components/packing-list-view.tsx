@@ -5,6 +5,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  ShoppingBag,
   Trash2,
   X,
 } from "lucide-react";
@@ -523,10 +524,11 @@ export function PackingListView({
                             href={item.affiliateLink}
                             target="_blank"
                             rel="noopener noreferrer sponsored"
-                            className="shrink-0 text-xs text-muted-foreground hover:text-primary"
+                            className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-primary"
                             aria-label={`Buy ${item.name} (opens in a new tab)`}
                             onClick={(event) => event.stopPropagation()}
                           >
+                            <ShoppingBag className="size-3.5" aria-hidden />
                             Buy
                           </a>
                         ) : null}

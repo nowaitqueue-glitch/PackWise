@@ -1,22 +1,23 @@
 # PackWise
 
-Smart packing for every trip. PackWise builds **weather-aware packing lists** from curated templates, layers in **forecasts**, lets you **share trips** so co-travelers can see your list, and **scan your suitcase** (3 free scans/month, unlimited on Pro) — all as an installable Progressive Web App.
+Smart packing for every trip. PackWise builds **weather-aware packing lists** from curated templates, layers in **forecasts**, lets you **share trips** so co-travelers can see your list, and includes **Suitcase Snap** (AI suitcase scanning — Coming Soon, PackWise Pro) — all as an installable Progressive Web App.
 
 ## Features
 
-- **Magic-link auth** — sign in with email via Supabase (no password)
+- **Email/password + Google auth** — sign in via Supabase (guest mode available)
 - **Trips** — destination, dates, trip type, traveler count
 - **Packing lists** — curated weather-aware templates (regenerate anytime)
 - **Weather-aware packing** — Open-Meteo daily highs/lows and rain chance for the trip window (geocodes with `name={city}` and optional `countryCode` filter, then exact `country_code` match; static climate averages beyond 16 days or when geocoding fails)
 - **Shared trips** — invite links so co-travelers can view the packing list (view-only; live collaborative check-offs coming soon)
-- **Scan My Suitcase** — photo → vision model suggests missing items (3 free scans/month; Pro unlimited via Stripe)
+- **Suitcase Snap** — photo → vision model suggests missing items (Coming Soon; PackWise Pro via Stripe when billing is live)
+- **Packing reminder emails** — daily cron emails owners of trips starting tomorrow (UTC) when packing is incomplete (opt out in Settings; Resend)
 - **Duplicate trip** — clone a trip and its list for the next adventure
 - **Dark mode** — system-aware theme toggle (persisted)
 - **PWA** — installable on desktop and mobile after a production build
 
 ## Stack
 
-Next.js 14 (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Supabase Auth + Postgres · Google Gemini (suitcase vision) · Stripe Checkout · Open-Meteo (weather + city search) · `@ducanh2912/next-pwa`
+Next.js 14 (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Supabase Auth + Postgres · Google Gemini (suitcase vision) · Stripe Checkout · Resend (packing reminders) · Open-Meteo (weather + city search) · `@ducanh2912/next-pwa`
 
 ## Environment variables
 
@@ -36,11 +37,15 @@ copy .env.local.example .env.local
 | `STRIPE_PRICE_ID` | Optional (billing) | Server only | Recurring Price id (`price_…`) for PackWise Pro |
 | `STRIPE_WEBHOOK_SECRET` | Optional (billing) | Server only | Signing secret for `POST /api/stripe/webhook` (sets `profiles.is_pro`) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Optional | Browser | Only needed if you add Stripe.js client UI later |
-| `NEXT_PUBLIC_APP_URL` | Optional | Server | Origin for Checkout success/cancel URLs (defaults to `http://localhost:3000`) |
+| `NEXT_PUBLIC_APP_URL` | Optional | Server | Origin for Checkout / packing-reminder email links (defaults to `http://localhost:3000`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes (cron, webhooks, test bootstrap) | Server only | Service role key — never expose to the client |
+| `CRON_SECRET` | Yes (packing reminders) | Server only | Bearer token for `GET /api/cron/packing-reminders` (Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`) |
+| `RESEND_API_KEY` | Yes (packing reminders) | Server only | [Resend API key](https://resend.com/api-keys) for packing reminder emails |
+| `RESEND_FROM_EMAIL` | Optional | Server only | Verified sender, e.g. `PackWise <reminders@yourdomain.com>`. Defaults to Resend onboarding address |
 | `NEXT_PUBLIC_DEBUG_WEATHER` | Optional | Browser | Set to `true` to show geocoded lat/lon under each weather day (local debug only) |
 | `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | Optional | Browser | Plausible site domain (e.g. `packwise.app`). Script loads only after cookie consent **Accept**. Without it, Accept still stores consent but analytics is a no-op. |
 
-Never prefix Gemini or Stripe secret keys with `NEXT_PUBLIC_` — they must stay server-only. Weather and city search use [Open-Meteo](https://open-meteo.com/) (no API key). Cookie consent uses `packwise_cookie_consent` (`accepted` / `declined`, 1-year max-age); Decline never loads Plausible.
+Never prefix Gemini, Stripe, Resend, cron, or service-role secrets with `NEXT_PUBLIC_` — they must stay server-only. Weather and city search use [Open-Meteo](https://open-meteo.com/) (no API key). Cookie consent uses `packwise_cookie_consent` (`accepted` / `declined`, 1-year max-age); Decline never loads Plausible.
 
 ### Vercel (Production + Preview)
 
@@ -48,9 +53,14 @@ In the [Vercel dashboard](https://vercel.com) → your project → **Settings** 
 
 1. `NEXT_PUBLIC_SUPABASE_URL` — your Supabase project URL  
 2. `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon key  
-3. `GEMINI_API_KEY` — paste your real Gemini key (suitcase scan)  
-4. `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` — when enabling billing  
-5. `PACKWISE_PRO` — optional; `true` only for forced Pro in a given environment  
+3. `SUPABASE_SERVICE_ROLE_KEY` — service role (cron trip queries, Stripe webhook Pro updates)  
+4. `CRON_SECRET` — long random string; Vercel Cron attaches it as `Authorization: Bearer …`  
+5. `RESEND_API_KEY` — packing reminder emails  
+6. `RESEND_FROM_EMAIL` — optional verified From address  
+7. `GEMINI_API_KEY` — paste your real Gemini key (suitcase scan)  
+8. `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` — when enabling billing  
+9. `PACKWISE_PRO` — optional; `true` only for forced Pro in a given environment  
+10. `NEXT_PUBLIC_APP_URL` — production origin (no trailing slash) for email / Checkout links  
 
 Or with the CLI (interactive — run locally in your terminal):
 
@@ -59,7 +69,8 @@ vercel login
 vercel link
 vercel env add NEXT_PUBLIC_SUPABASE_URL production
 vercel env add NEXT_PUBLIC_SUPABASE_URL preview
-# repeat for GEMINI_API_KEY, STRIPE_*, NEXT_PUBLIC_SUPABASE_ANON_KEY
+# repeat for SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET, RESEND_API_KEY,
+# RESEND_FROM_EMAIL, GEMINI_API_KEY, STRIPE_*, NEXT_PUBLIC_SUPABASE_ANON_KEY
 vercel env ls
 ```
 
@@ -70,31 +81,38 @@ After changing env vars, **redeploy** so the new values are picked up.
 Also set Supabase Auth URLs for production (Authentication → URL Configuration).
 Use your real Vercel / custom domain from the Vercel dashboard (Project → Domains) — do not invent a hostname.
 
-Magic links use `emailRedirectTo: window.location.origin` (bare origin, no `/auth/callback` path). The landing page detects `?code=` and forwards to `/auth/callback` for a cookie-safe exchange. Allowlist **bare origins** plus `/**`:
+OAuth (Google) and email confirmation use `redirectTo` / `emailRedirectTo` pointing at `/auth/callback` (with optional `?next=` for guest claim). Password recovery lands on `/reset-password`. Allowlist origins plus callback paths:
 
 - **Site URL**: `https://<your-production-domain>` (e.g. `https://packwise.app` if that is your custom domain)
 - **Redirect URLs** (add each that applies):
-  - `https://<your-production-domain>`
-  - `https://<your-production-domain>/**` (covers `/?code=…`, `/auth/callback`, `/reset-password`, guest claim)
+  - `https://<your-production-domain>/auth/callback`
+  - `https://<your-production-domain>/reset-password`
+  - `https://<your-production-domain>/**` (covers callback query variants and guest claim)
   - Preview deploy (example — use your actual preview host):
-    - `https://packwise2026-bndidqy68-nowaitqueue-7040s-projects.vercel.app`
+    - `https://packwise2026-bndidqy68-nowaitqueue-7040s-projects.vercel.app/auth/callback`
     - `https://packwise2026-bndidqy68-nowaitqueue-7040s-projects.vercel.app/**`
   - Optional preview wildcard: `https://*-<your-vercel-team>.vercel.app/**`
 
-If `NEXT_PUBLIC_APP_URL` is set in Vercel, it must be that same production origin (no trailing slash). Magic-link `emailRedirectTo` uses the browser origin at send time; a mismatched Site URL / allowlist still causes failed or wrong redirects.
+If `NEXT_PUBLIC_APP_URL` is set in Vercel, it must be that same production origin (no trailing slash). A mismatched Site URL / allowlist still causes failed or wrong redirects.
 
 ## Supabase setup
 
 ### Auth
 
-1. **Authentication** → **Providers** → enable **Email** / magic link (OTP).
-2. **Authentication** → **URL Configuration**:
+1. **Authentication** → **Providers** → enable **Email** (email + password). Disable magic-link / OTP email templates if you no longer want them.
+2. **Authentication** → **Providers** → enable **Google**. Add your Google OAuth Client ID and Client Secret from Google Cloud Console (Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`).
+3. **MVP: disable email confirmation** (this cannot be toggled from the PackWise app — use the Supabase Dashboard):
+   - Open [Supabase Dashboard](https://supabase.com/dashboard) → your project
+   - **Authentication** → **Providers** → **Email**
+   - Turn **Confirm email** / **Enable email confirmations** **OFF**
+   - With confirmations off, `signUp` returns a session and the app navigates straight to the dashboard (or preserved `next`). With confirmations on, the app shows a check-email screen and does **not** treat the user as logged in.
+4. **Authentication** → **URL Configuration**:
    - Local **Site URL**: `http://localhost:3000` (or `http://localhost:3001` if that port is what `npm run dev` uses)
-   - **Redirect URLs** (local) — bare origin + `/**` (magic links land on `/` with `?code=`):
-     - `http://localhost:3000`
+   - **Redirect URLs** (local):
+     - `http://localhost:3000/auth/callback`
+     - `http://localhost:3000/reset-password`
      - `http://localhost:3000/**`
-     - If you use port 3001: `http://localhost:3001` and `http://localhost:3001/**`
-     - Optional explicit paths still fine: `/auth/callback`, `/reset-password`
+     - If you use port 3001: the same three paths on `http://localhost:3001`
 
 
 ### Migrations (apply in order)
@@ -109,6 +127,32 @@ In the [SQL Editor](https://supabase.com/dashboard) (or `supabase db push` if us
 6. `supabase/migrations/20260719151000_fix_trips_select_policy.sql`
 7. `supabase/migrations/20260719160000_create_trip_weather.sql`
 8. `supabase/migrations/20260720100000_create_profiles.sql` — scan quotas + Pro flags
+9. Apply remaining files in `supabase/migrations/` in chronological order (onboarding, notification prefs, RLS hardening, packing custom items, webhooks, etc.)
+
+**Packing reminders** need at least:
+
+- `supabase/migrations/20260722180000_add_notification_prefs.sql` — `profiles.packing_reminder_email` (default `true`) + push pref
+- `supabase/migrations/20260723000000_fix_profile_update_policy.sql` — Settings can update prefs
+- `supabase/migrations/20260726120000_create_reminder_log.sql` — idempotent send log (`reminder_log`)
+
+If those columns/tables are missing in your project, the Settings toggle and/or cron will fail until you apply the migrations above.
+
+### Packing reminder emails (Resend + Vercel Cron)
+
+Daily job (`vercel.json`): `GET /api/cron/packing-reminders` at `0 9 * * *` (09:00 UTC). Path must **not** include the secret — auth is `Authorization: Bearer <CRON_SECRET>` (also accepts `x-cron-secret` for local tools).
+
+Logic: trips with `start_date` = tomorrow (UTC), packing list not 100% complete, and `profiles.packing_reminder_email !== false`. Sends via Resend; claims a `reminder_log` row so each trip is emailed at most once per UTC day.
+
+**Local dry-run** (no Resend send, no `reminder_log` claim). If Postgres (or another process) already owns port 3000, run Next on **3001**:
+
+```bash
+npx next dev -p 3001
+# then:
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  "http://localhost:3001/api/cron/packing-reminders?dryRun=1"
+```
+
+Omit `dryRun=1` to send for real (requires `RESEND_API_KEY` + applied migrations). Users toggle the preference under **Settings → Notifications** (`packing_reminder_email`).
 
 ### Stripe billing (optional)
 
@@ -128,7 +172,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for the marketing landing page. Use **Get started** / **Log in** for magic-link auth, then the dashboard.
+Open [http://localhost:3000](http://localhost:3000) for the marketing landing page. Use **Get started** / **Log in** for email/password or Google auth, then the dashboard.
+
+If port **3000** is already taken (common when local Postgres uses it), start the app on **3001**: `npx next dev -p 3001`, and point Supabase Auth redirect URLs / `NEXT_PUBLIC_APP_URL` at that origin.
 
 | Command | Description |
 | ------- | ----------- |
@@ -151,7 +197,7 @@ node scripts/create-test-user.mjs --write-env
 # or: npm run test:user
 ```
 
-That creates/looks up `test@packwise.com` (password `test123` by default), mints a session, and upserts `TEST_USER_JWT`, `TEST_USER_REFRESH_TOKEN`, `TEST_USER_ID`, `E2E_TEST_USER_EMAIL`, and `E2E_TEST_USER_ID` in `.env.local` without clobbering other secrets.
+That creates/looks up `test@packwise.com` (password `Test1234!` by default), mints a session via `signInWithPassword`, and upserts `TEST_USER_JWT`, `TEST_USER_REFRESH_TOKEN`, `TEST_USER_ID`, `E2E_TEST_USER_EMAIL`, and `E2E_TEST_USER_ID` in `.env.local` without clobbering other secrets.
 
 Then:
 
@@ -177,7 +223,7 @@ PackWise uses Playwright against a local Next.js server.
 
 The Playwright `webServer` starts Next on **`127.0.0.1:3333`** (override with `PLAYWRIGHT_PORT` / `PLAYWRIGHT_BASE_URL`) and sets `ENABLE_TEST_LOGIN=true`. Flow:
 
-1. **setup** project (`e2e/auth.setup.ts`) — prefers `TEST_USER_JWT` cookies (`sb-<ref>-auth-token`); falls back to `GET /api/test/login` (service-role magic link) when no JWT
+1. **setup** project (`e2e/auth.setup.ts`) — prefers `TEST_USER_JWT` cookies (`sb-<ref>-auth-token`); falls back to `GET /api/test/login` (service-role session mint) when no JWT
 2. Create a Paris trip on `/dashboard/new-trip`
 3. Assert packing list items, toggle a checkbox, assert progress updates
 
@@ -187,9 +233,10 @@ Without Supabase + test-user env vars, the e2e suite **skips** with a clear mess
 
 1. Push the repo to GitHub (or connect the folder with `vercel`).
 2. Import the project in Vercel (or run `vercel` / `vercel --prod` from a linked project).
-3. Add the environment variables above for Production and Preview.
-4. Apply Supabase migrations and update Auth redirect URLs for the deployed domain.
-5. Redeploy after env or Auth URL changes.
+3. Add the environment variables above for Production and Preview (including `CRON_SECRET`, `RESEND_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` for packing reminders).
+4. Apply Supabase migrations (including notification prefs + `reminder_log`) and update Auth redirect URLs for the deployed domain.
+5. Confirm `vercel.json` registers cron `/api/cron/packing-reminders` at `0 9 * * *` (no secret in the path).
+6. Redeploy after env or Auth URL changes.
 
 ## Progressive Web App (PWA)
 
@@ -203,7 +250,7 @@ PackWise uses [`@ducanh2912/next-pwa`](https://github.com/DuCanhGH/next-pwa). Th
 ## Project structure
 
 - `src/app/page.tsx` — marketing landing (`/`)
-- `src/app/login` — magic-link sign-in
+- `src/app/login` — email/password + Google sign-in (guest mode)
 - `src/app/dashboard` — trips, packing, weather, invite, suitcase scan
 - `src/app/api/weather` — weather forecast API route
 - `src/lib/supabase/` — browser, server, and middleware clients

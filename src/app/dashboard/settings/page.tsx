@@ -180,6 +180,8 @@ export default async function SettingsPage() {
           <SettingsAppearance />
         </SettingsSection>
 
+        {/* TODO: Enable billing panel when Stripe checkout is live */}
+
         <SettingsSection
           icon={ShieldCheck}
           title="Privacy & Data"

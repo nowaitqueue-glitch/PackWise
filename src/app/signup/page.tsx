@@ -5,7 +5,7 @@ type SignupPageProps = {
 };
 
 /**
- * Minimal signup entry — PackWise uses magic-link / password on /login.
+ * Minimal signup entry — redirects to /login in create-account mode.
  * Preserves `from=guest` / `claim=guest` so claim flow can run after auth.
  */
 export default function SignupPage({ searchParams }: SignupPageProps) {

@@ -25,7 +25,7 @@ type GuestLockedDialogProps = {
 
 const BENEFITS = [
   "Save trips",
-  "Unlimited scans",
+  "Weather-aware packing lists",
   "Share lists",
 ] as const;
 

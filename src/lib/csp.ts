@@ -48,7 +48,10 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "base-uri 'self'",
     "form-action 'self' https://checkout.stripe.com",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
+    // Only on real HTTPS. Emitting this on http://localhost upgrades
+    // same-origin navigations (e.g. /auth/callback) to https://localhost
+    // and can abort the OAuth / email-confirm forward mid-flight.
+    ...(isDev ? [] : ["upgrade-insecure-requests"]),
   ];
 
   return directives.join("; ");

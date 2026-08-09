@@ -318,6 +318,12 @@ export async function GET(request: NextRequest) {
   const resend = resendReady ? new Resend(resendKey) : null;
   const origin = appOrigin();
 
+  if (!resendReady && !dryRun) {
+    console.warn(
+      "[cron/packing-reminders] RESEND_API_KEY is not configured; packing reminder emails will not be sent."
+    );
+  }
+
   for (const trip of candidates) {
     const base: Omit<ReminderResult, "status" | "email" | "error"> = {
       tripId: trip.id,
@@ -374,8 +380,8 @@ export async function GET(request: NextRequest) {
       }
 
       if (!resend) {
-        console.error(
-          `[cron/packing-reminders] RESEND_API_KEY missing - would email ${email} for trip ${trip.id}`
+        console.warn(
+          `[cron/packing-reminders] RESEND_API_KEY missing - skipped email to ${email} for trip ${trip.id}`
         );
         results.push({
           ...base,

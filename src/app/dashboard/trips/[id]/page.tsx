@@ -5,10 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   customItemToPackingItem,
   parsePackingItems,
-  parsePackingListSource,
-  type PackingListSource,
 } from "@/lib/packing";
-import { getScanQuota } from "@/lib/pro";
+// import { getScanQuota } from "@/lib/pro";
 import { formatTripType } from "@/lib/trips";
 import { peekCachedTripWeatherCondition } from "@/lib/trip-weather-cache";
 import { TripSceneBackgroundRoot } from "@/components/trip-scene-background";
@@ -17,7 +15,7 @@ import { DuplicateTripButton } from "@/components/duplicate-trip-button";
 import { TripExportShare } from "@/components/trip-export-share";
 import { TripInviteDialog } from "@/components/trip-invite-dialog";
 import { TripPackingListSection } from "@/components/trip-packing-list-section";
-import { TripSuitcaseScan } from "@/components/trip-suitcase-scan-lazy";
+// import { TripSuitcaseScan } from "@/components/trip-suitcase-scan-lazy";
 import { TripWeatherSection } from "@/components/trip-weather-section";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
 import { Button } from "@/components/ui/button";
@@ -84,7 +82,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     { count: memberCount },
     { data: packingList },
     customItemsResult,
-    scanQuota,
+    // scanQuota, // restore with TripSuitcaseScan
     cachedCondition,
   ] = await Promise.all([
     supabase
@@ -108,7 +106,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
       .select("id, name, category, notes, packed")
       .eq("trip_id", id)
       .order("created_at", { ascending: true }),
-    getScanQuota(user.id),
+    // getScanQuota(user.id), // restore with TripSuitcaseScan
     peekCachedTripWeatherCondition(supabase, id),
   ]);
 
@@ -134,9 +132,6 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
     })
   );
   const exportItems = [...packingItems, ...customItems];
-  const storedSource = parsePackingListSource(packingList?.items);
-  const listSource: PackingListSource | undefined =
-    storedSource ?? (packingItems.length > 0 ? "template" : undefined);
 
   return (
     <TripSceneBackgroundRoot
@@ -289,10 +284,10 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           customItems={customItems}
           canRegenerate={isOwner}
           canEdit={isOwner}
-          listSource={listSource}
           expectPending={expectPendingPacking && packingItems.length === 0}
         />
 
+        {/* Suitcase Snap — temporarily hidden; restore TripSuitcaseScan + getScanQuota to re-enable
         <TripSuitcaseScan
           tripId={trip.id}
           isPro={scanQuota.isPro}
@@ -303,6 +298,22 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
             customItems.filter((item) => item.packed).length
           }
         />
+        */}
+
+        <div className="rounded-2xl border-2 border-dashed border-blue-300/50 bg-gradient-to-br from-blue-50/50 to-teal-50/50 dark:from-blue-950/20 dark:to-teal-950/20 p-6 text-center">
+          <div className="text-3xl mb-3">📸</div>
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">
+            Suitcase Snap — Coming Soon
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+            AI-powered suitcase scanning will be available with PackWise Pro.
+            Snap a photo of your packed bag and we&apos;ll tell you what
+            you&apos;re forgetting.
+          </p>
+          <span className="inline-block mt-4 px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full">
+            Pro Feature
+          </span>
+        </div>
       </main>
     </TripSceneBackgroundRoot>
   );

@@ -15,10 +15,7 @@ import {
   type CustomFormState,
 } from "@/components/packing-list-view";
 import { usePillBanner } from "@/components/pill-banner-provider";
-import {
-  type PackingItem,
-  type PackingListSource,
-} from "@/lib/packing";
+import { type PackingItem } from "@/lib/packing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -31,8 +28,6 @@ type TripPackingListProps = {
   canRegenerate?: boolean;
   /** Owner-only; members see read-only checkboxes. */
   canEdit?: boolean;
-  /** How the stored list was generated. */
-  listSource?: PackingListSource;
 };
 
 function mergeDisplayItems(
@@ -253,13 +248,6 @@ export function TripPackingList({
       readOnly={!canEdit}
       disabled={isRegenerating}
       busy={busy}
-      titleBadge={
-        hasItems ? (
-          <Badge variant="secondary" data-testid="packing-standard-badge">
-            Template
-          </Badge>
-        ) : null
-      }
       description={description}
       headerActions={
         canRegenerate ? (

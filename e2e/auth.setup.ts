@@ -56,7 +56,7 @@ setup("authenticate", async ({ page, baseURL }) => {
     await page.goto(`${origin}/dashboard`);
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
   } else {
-    // Fallback: service-role magic-link mint via test route (Set-Cookie on this origin).
+    // Fallback: service-role session mint via test route (Set-Cookie on this origin).
     await page.goto(`${origin}/api/test/login`);
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
   }

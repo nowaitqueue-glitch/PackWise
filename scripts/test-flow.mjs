@@ -19,13 +19,14 @@
  * Auth resolution (prefer token first):
  *   1) TEST_USER_JWT or SUPABASE_ACCESS_TOKEN — validated via getUser, then
  *      used as Bearer for REST + /api/packing/generate.
- *   2) SUPABASE_SERVICE_ROLE_KEY + TEST_USER_ID — mints a short-lived session
- *      via Admin generateLink + verifyOtp when no JWT is set.
+ *   2) Email + password via signInWithPassword when no JWT is set
+ *      (defaults: test@packwise.com / Test1234!).
  *
  * Env (see .env.local.example): loaded from project-root `.env.local`.
  *   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY (required)
  *   TEST_USER_JWT | SUPABASE_ACCESS_TOKEN (preferred)
- *   SUPABASE_SERVICE_ROLE_KEY, TEST_USER_ID (optional fallback)
+ *   E2E_TEST_USER_EMAIL, E2E_TEST_USER_PASSWORD (optional password fallback)
+ *   SUPABASE_SERVICE_ROLE_KEY (optional; trip/packing insert retry)
  *   TEST_BASE_URL (default http://localhost:3000)
  *   Weather + city search use Open-Meteo (no API key).
  */
@@ -55,6 +56,12 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 const TEST_USER_ID = process.env.TEST_USER_ID?.trim();
+const TEST_USER_EMAIL =
+  process.env.E2E_TEST_USER_EMAIL?.trim() ||
+  process.env.TEST_USER_EMAIL?.trim() ||
+  "test@packwise.com";
+const TEST_USER_PASSWORD =
+  process.env.E2E_TEST_USER_PASSWORD?.trim() || "Test1234!";
 const TRIP_TYPE = "city break"; // matches public.trip_type enum
 
 /** Realistic sample packing list for --mock-apis (Berlin city break). */
@@ -209,56 +216,32 @@ function adminClient() {
 }
 
 /**
- * Mint a short-lived access token for TEST_USER_ID via Admin API.
+ * Mint a short-lived access token via email + password (no magic link).
  */
-async function mintAccessTokenForUser(userId) {
-  const admin = adminClient();
-  const { data: userData, error: userError } =
-    await admin.auth.admin.getUserById(userId);
-  if (userError || !userData?.user?.email) {
-    throw new Error(
-      userError?.message ||
-        "Could not load TEST_USER_ID email for session minting."
-    );
-  }
-
-  const email = userData.user.email;
-  console.log(`  Minting session for ${email} via Admin generateLink…`);
-
-  const { data: linkData, error: linkError } =
-    await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-    });
-  if (linkError) {
-    throw new Error(`generateLink failed: ${linkError.message}`);
-  }
-
-  const tokenHash =
-    linkData?.properties?.hashed_token ?? linkData?.hashed_token;
-  if (!tokenHash) {
-    throw new Error(
-      "generateLink did not return hashed_token; set TEST_USER_JWT manually."
-    );
-  }
+async function mintAccessTokenWithPassword(email, password) {
+  console.log(`  Minting session for ${email} via signInWithPassword…`);
 
   const anon = createClient(SUPABASE_URL, ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
   });
-  const { data: otpData, error: otpError } = await anon.auth.verifyOtp({
-    token_hash: tokenHash,
-    type: "email",
+  const { data, error } = await anon.auth.signInWithPassword({
+    email,
+    password,
   });
-  if (otpError || !otpData?.session?.access_token) {
+  if (error || !data?.session?.access_token) {
     throw new Error(
-      otpError?.message ||
-        "verifyOtp failed; paste a browser access_token into TEST_USER_JWT."
+      error?.message ||
+        "signInWithPassword failed; run `node scripts/create-test-user.mjs --write-env` or set TEST_USER_JWT."
     );
   }
 
   return {
-    accessToken: otpData.session.access_token,
-    userId: otpData.session.user?.id ?? userId,
+    accessToken: data.session.access_token,
+    userId: data.session.user?.id ?? TEST_USER_ID ?? "",
   };
 }
 
@@ -285,21 +268,23 @@ async function resolveAuth() {
     return { accessToken: jwt, userId: user.id, mode: "jwt" };
   }
 
-  if (SERVICE_ROLE_KEY && TEST_USER_ID) {
-    console.log(
-      `  Auth mode: service_role + TEST_USER_ID=${TEST_USER_ID} (minting JWT; prefer create-test-user --write-env)`
-    );
-    const minted = await mintAccessTokenForUser(TEST_USER_ID);
-    return {
-      accessToken: minted.accessToken,
-      userId: minted.userId,
-      mode: "service_role",
-    };
-  }
-
-  throw new Error(
-    "Set TEST_USER_JWT via `node scripts/create-test-user.mjs --write-env`, or SUPABASE_SERVICE_ROLE_KEY + TEST_USER_ID."
+  console.log(
+    `  Auth mode: signInWithPassword (${TEST_USER_EMAIL}; prefer create-test-user --write-env)`
   );
+  const minted = await mintAccessTokenWithPassword(
+    TEST_USER_EMAIL,
+    TEST_USER_PASSWORD
+  );
+  if (!minted.userId) {
+    throw new Error(
+      "signInWithPassword returned no user id; re-run create-test-user."
+    );
+  }
+  return {
+    accessToken: minted.accessToken,
+    userId: minted.userId,
+    mode: "password",
+  };
 }
 
 async function createTestTrip(accessToken, userId) {

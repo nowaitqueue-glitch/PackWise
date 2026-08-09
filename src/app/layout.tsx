@@ -24,7 +24,7 @@ const geistMono = localFont({
 
 const siteUrl = getSiteUrl();
 const siteDescription =
-  "PackWise builds weather-aware packing lists for every trip — share with friends and scan your suitcase so nothing gets left behind.";
+  "PackWise builds weather-aware packing lists for every trip — create trips, check off items as you pack, and revisit past trips anytime.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

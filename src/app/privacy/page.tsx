@@ -56,7 +56,7 @@ export default function PrivacyPage() {
               <li>
                 <span className="font-medium text-foreground">Account data</span>{" "}
                 — email address and authentication details when you sign in
-                (magic link or password).
+                (email/password or Google).
               </li>
               <li>
                 <span className="font-medium text-foreground">Trip data</span> —

@@ -223,7 +223,7 @@ export async function scanSuitcase(
       return {
         ok: false,
         error:
-          "You've used all 3 free suitcase scans this month. Upgrade to Pro for unlimited scans.",
+          "You've used all 3 free suitcase scans this month. Unlimited scans with PackWise Pro — Coming Soon.",
         code: "SCAN_LIMIT",
         scansRemaining: 0,
       };
@@ -253,7 +253,7 @@ export async function scanSuitcase(
       return {
         ok: false,
         error:
-          "You've used all 3 free suitcase scans this month. Upgrade to Pro for unlimited scans.",
+          "You've used all 3 free suitcase scans this month. Unlimited scans with PackWise Pro — Coming Soon.",
         code: "SCAN_LIMIT",
         scansRemaining: 0,
       };

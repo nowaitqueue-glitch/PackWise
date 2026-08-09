@@ -12,7 +12,11 @@
  *
  * Optional overrides:
  *   E2E_TEST_USER_EMAIL (default: test@packwise.com)
- *   E2E_TEST_USER_PASSWORD (default: test123)
+ *   E2E_TEST_USER_PASSWORD (default: Test1234!)
+ *
+ * Creates/updates the user via Admin createUser (email + password, confirmed).
+ * If the user already exists, updates password / email_confirm. Session is
+ * minted with signInWithPassword only (no magic link).
  *
  * With `--write-env`, upserts these keys in `.env.local` (other lines untouched):
  *   TEST_USER_JWT, TEST_USER_REFRESH_TOKEN, TEST_USER_ID,
@@ -44,7 +48,7 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 const EMAIL =
   process.env.E2E_TEST_USER_EMAIL?.trim() || "test@packwise.com";
 const PASSWORD =
-  process.env.E2E_TEST_USER_PASSWORD?.trim() || "test123";
+  process.env.E2E_TEST_USER_PASSWORD?.trim() || "Test1234!";
 
 /** Keys managed by this script when --write-env is set. */
 const ENV_KEYS = [
@@ -165,60 +169,26 @@ async function ensureUser(admin) {
 }
 
 /**
- * Prefer password sign-in; fall back to Admin magic-link + verifyOtp.
+ * Mint a session with email + password only (no magic link / OTP).
  */
-async function mintSession(admin) {
-  console.log("Minting session…");
+async function mintSession() {
+  console.log("Minting session via signInWithPassword…");
 
   const anon = anonClient();
-  const passwordAttempt = await anon.auth.signInWithPassword({
+  const { data, error } = await anon.auth.signInWithPassword({
     email: EMAIL,
     password: PASSWORD,
   });
 
-  if (passwordAttempt.data?.session?.access_token) {
-    console.log("  Session via signInWithPassword.");
-    return passwordAttempt.data.session;
-  }
-
-  console.warn(
-    `  signInWithPassword failed (${passwordAttempt.error?.message || "no session"}); trying Admin generateLink…`
-  );
-
-  const { data: linkData, error: linkError } =
-    await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: EMAIL,
-    });
-  if (linkError) {
+  if (error || !data?.session?.access_token) {
     fail(
-      "generateLink failed — could not mint ACCESS_TOKEN",
-      linkError.message
+      "signInWithPassword failed — could not mint ACCESS_TOKEN",
+      error?.message || "No session returned"
     );
   }
 
-  const tokenHash =
-    linkData?.properties?.hashed_token ?? linkData?.hashed_token;
-  if (!tokenHash) {
-    fail(
-      "generateLink did not return hashed_token — could not mint ACCESS_TOKEN"
-    );
-  }
-
-  const otpAttempt = await anon.auth.verifyOtp({
-    token_hash: tokenHash,
-    type: "email",
-  });
-
-  if (otpAttempt.error || !otpAttempt.data?.session?.access_token) {
-    fail(
-      "verifyOtp failed — could not mint ACCESS_TOKEN",
-      otpAttempt.error?.message || "No session returned"
-    );
-  }
-
-  console.log("  Session via Admin generateLink + verifyOtp.");
-  return otpAttempt.data.session;
+  console.log("  Session via signInWithPassword.");
+  return data.session;
 }
 
 /**
@@ -303,7 +273,7 @@ async function main() {
 
   const admin = adminClient();
   const user = await ensureUser(admin);
-  const session = await mintSession(admin);
+  const session = await mintSession();
 
   const accessToken = session.access_token;
   const refreshToken = session.refresh_token || "";

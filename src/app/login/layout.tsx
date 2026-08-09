@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Sign in",
   description:
-    "Sign in or create a PackWise account with a magic link to save trips and packing lists.",
+    "Sign in or create a PackWise account with email and password, or continue with Google.",
 };
 
 export default function LoginLayout({

@@ -24,7 +24,7 @@ type SettingsAccountProps = {
 
 /**
  * Detect password availability without dummy sign-in attempts.
- * Email identities cover both magic-link and password auth, so we rely on
+ * Email identities cover password auth; we rely on
  * `user_metadata.has_password` (set after set/change/reset password, or
  * password sign-in). Identities/providers confirm the user can authenticate.
  */
@@ -64,7 +64,7 @@ export function SettingsAccount({ email }: SettingsAccountProps) {
 }
 
 export function SettingsPassword({ email }: SettingsAccountProps) {
-  // Default to "set" UX (magic-link primary); upgrade after user lookup.
+  // Default to "set" UX until we know whether a password exists.
   const [hasPassword, setHasPassword] = useState(false);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function SettingsPassword({ email }: SettingsAccountProps) {
       <p className="text-sm text-muted-foreground">
         {hasPassword
           ? "Passwords must be at least 8 characters."
-          : "Magic-link accounts can set a password for faster sign-in next time. Passwords must be at least 8 characters."}
+          : "Set a password so you can sign in with email next time. Passwords must be at least 8 characters."}
       </p>
       <div className="flex flex-wrap gap-2">
         <ChangePasswordDialog
@@ -146,7 +146,7 @@ function ChangePasswordDialog({
           <DialogDescription>
             {hasPassword
               ? "Confirm your current password, then choose a new one."
-              : "Choose a password so you can sign in without a magic link."}
+              : "Choose a password so you can sign in with email and password."}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4 py-2">

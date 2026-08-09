@@ -13,38 +13,42 @@ type SettingsNotificationsProps = {
 };
 
 export function SettingsNotifications({
-  showPackingReminder,
-  packingReminderEmail: initialPackingReminder,
+  showPackingReminder: _showPackingReminder,
+  packingReminderEmail: _initialPackingReminder,
   pushNotifications: initialPush,
 }: SettingsNotificationsProps) {
   const { showBanner } = usePillBanner();
-  const [packingReminder, setPackingReminder] = useState(initialPackingReminder);
   const [pushEnabled, setPushEnabled] = useState(initialPush);
   const [isPending, startTransition] = useTransition();
 
-  function savePrefs(next: {
-    packingReminderEmail?: boolean;
-    pushNotifications?: boolean;
-  }) {
-    startTransition(async () => {
-      const result = await updateNotificationPrefs(next);
-      if (!result.ok) {
-        showBanner({ message: result.error, variant: "error" });
-        if (typeof next.packingReminderEmail === "boolean") {
-          setPackingReminder(!next.packingReminderEmail);
-        }
-        if (typeof next.pushNotifications === "boolean") {
-          setPushEnabled(!next.pushNotifications);
-        }
-        return;
-      }
-      showBanner({ message: "Preferences saved.", variant: "success" });
-    });
-  }
-
   return (
     <div className="divide-y divide-slate-900/5 dark:divide-white/10">
-      {showPackingReminder ? (
+      {/* TODO: Enable when Resend API key is configured in production
+          Requires RESEND_API_KEY in Vercel env vars and verified sending domain */}
+      {/*
+      const [packingReminder, setPackingReminder] = useState(_initialPackingReminder);
+
+      function savePrefs(next: {
+        packingReminderEmail?: boolean;
+        pushNotifications?: boolean;
+      }) {
+        startTransition(async () => {
+          const result = await updateNotificationPrefs(next);
+          if (!result.ok) {
+            showBanner({ message: result.error, variant: "error" });
+            if (typeof next.packingReminderEmail === "boolean") {
+              setPackingReminder(!next.packingReminderEmail);
+            }
+            if (typeof next.pushNotifications === "boolean") {
+              setPushEnabled(!next.pushNotifications);
+            }
+            return;
+          }
+          showBanner({ message: "Preferences saved.", variant: "success" });
+        });
+      }
+
+      {_showPackingReminder ? (
         <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
           <div className="min-w-0 space-y-1">
             <Label htmlFor="packing-reminder">Packing reminder email</Label>
@@ -64,6 +68,12 @@ export function SettingsNotifications({
           />
         </div>
       ) : null}
+      */}
+      <div className="py-4 first:pt-0 last:pb-0">
+        <div className="text-sm italic text-muted-foreground">
+          Email reminders — Coming Soon
+        </div>
+      </div>
 
       <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
         <div className="min-w-0 space-y-1">

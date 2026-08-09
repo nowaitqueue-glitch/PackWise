@@ -9,11 +9,11 @@ import { isTestLoginEnabled } from "@test/utils/e2e";
  *
  * Prefers TEST_USER_JWT (+ TEST_USER_REFRESH_TOKEN) from env when set
  * (from `node scripts/create-test-user.mjs --write-env`). Falls back to
- * service-role generateLink + verifyOtp.
+ * email + password via signInWithPassword (no magic link).
  *
  * Hard-gated to NODE_ENV=development; also requires ENABLE_TEST_LOGIN=true
- * (or E2E_TEST_MODE=true), plus JWT tokens or SUPABASE_SERVICE_ROLE_KEY +
- * E2E_TEST_USER_*.
+ * (or E2E_TEST_MODE=true). Credentials default to test@packwise.com /
+ * Test1234! when E2E_TEST_USER_* are unset.
  */
 export async function GET(request: NextRequest) {
   if (process.env.NODE_ENV !== "development") {
@@ -75,30 +75,19 @@ export async function GET(request: NextRequest) {
     if (!sessionError) {
       return response;
     }
-    // Fall through to magic-link mint if the stored JWT is expired/invalid.
+    // Fall through to password sign-in if the stored JWT is expired/invalid.
     console.warn(
-      `[test/login] setSession from TEST_USER_JWT failed (${sessionError.message}); falling back to generateLink`
+      `[test/login] setSession from TEST_USER_JWT failed (${sessionError.message}); falling back to signInWithPassword`
     );
   }
-
-  if (!serviceRoleKey) {
-    return NextResponse.json(
-      {
-        error:
-          "Missing SUPABASE_SERVICE_ROLE_KEY (needed when TEST_USER_JWT/REFRESH are absent or invalid).",
-      },
-      { status: 500 }
-    );
-  }
-
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 
   let email =
     process.env.E2E_TEST_USER_EMAIL?.trim() ||
     process.env.TEST_USER_EMAIL?.trim() ||
     "";
+
+  const password =
+    process.env.E2E_TEST_USER_PASSWORD?.trim() || "Test1234!";
 
   const userId =
     process.env.E2E_TEST_USER_ID?.trim() ||
@@ -106,6 +95,19 @@ export async function GET(request: NextRequest) {
     "";
 
   if (!email && userId) {
+    if (!serviceRoleKey) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing SUPABASE_SERVICE_ROLE_KEY (needed to resolve E2E_TEST_USER_ID / TEST_USER_ID to an email).",
+        },
+        { status: 500 }
+      );
+    }
+
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
     const { data, error } = await admin.auth.admin.getUserById(userId);
     if (error || !data?.user?.email) {
       return NextResponse.json(
@@ -121,47 +123,19 @@ export async function GET(request: NextRequest) {
   }
 
   if (!email) {
-    return NextResponse.json(
-      {
-        error:
-          "Set TEST_USER_JWT + TEST_USER_REFRESH_TOKEN, or E2E_TEST_USER_EMAIL (or E2E_TEST_USER_ID / TEST_USER_ID) for test login.",
-      },
-      { status: 500 }
-    );
+    email = "test@packwise.com";
   }
 
-  const { data: linkData, error: linkError } =
-    await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-    });
-
-  if (linkError) {
-    return NextResponse.json(
-      { error: `generateLink failed: ${linkError.message}` },
-      { status: 500 }
-    );
-  }
-
-  const tokenHash =
-    linkData?.properties?.hashed_token ??
-    (linkData as { hashed_token?: string } | null)?.hashed_token;
-
-  if (!tokenHash) {
-    return NextResponse.json(
-      { error: "generateLink did not return hashed_token." },
-      { status: 500 }
-    );
-  }
-
-  const { error: otpError } = await supabase.auth.verifyOtp({
-    token_hash: tokenHash,
-    type: "email",
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   });
 
-  if (otpError) {
+  if (signInError) {
     return NextResponse.json(
-      { error: `verifyOtp failed: ${otpError.message}` },
+      {
+        error: `signInWithPassword failed: ${signInError.message}. Run: node scripts/create-test-user.mjs --write-env`,
+      },
       { status: 500 }
     );
   }

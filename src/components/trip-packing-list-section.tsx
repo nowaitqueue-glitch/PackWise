@@ -5,12 +5,7 @@ import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
-import {
-  parsePackingItems,
-  parsePackingListSource,
-  type PackingItem,
-  type PackingListSource,
-} from "@/lib/packing";
+import { parsePackingItems, type PackingItem } from "@/lib/packing";
 import { cn, glassChip } from "@/lib/utils";
 
 const TripPackingList = dynamic(
@@ -35,8 +30,6 @@ type TripPackingListSectionProps = {
   canRegenerate?: boolean;
   /** Owner-only; members see read-only checkboxes. */
   canEdit?: boolean;
-  /** How the stored list was generated. */
-  listSource?: PackingListSource;
   /**
    * When true and the list is still empty, show a skeleton and poll until
    * items appear (or timeout → regenerate CTA).
@@ -52,11 +45,9 @@ export function TripPackingListSection({
   customItems = [],
   canRegenerate = true,
   canEdit = true,
-  listSource,
   expectPending = false,
 }: TripPackingListSectionProps) {
   const [items, setItems] = useState(initialItems);
-  const [source, setSource] = useState(listSource);
   const [loadState, setLoadState] = useState<LoadState>(() => {
     if (initialItems.length > 0) return "ready";
     if (expectPending) return "pending";
@@ -65,13 +56,12 @@ export function TripPackingListSection({
 
   useEffect(() => {
     setItems(initialItems);
-    setSource(listSource);
     if (initialItems.length > 0) {
       setLoadState("ready");
     } else if (expectPending) {
       setLoadState((current) => (current === "failed" ? current : "pending"));
     }
-  }, [initialItems, listSource, expectPending]);
+  }, [initialItems, expectPending]);
 
   useEffect(() => {
     if (loadState !== "pending") {
@@ -99,11 +89,7 @@ export function TripPackingListSection({
         return false;
       }
 
-      const nextSource =
-        parsePackingListSource(data?.items) ??
-        (nextItems.length > 0 ? "template" : undefined);
       setItems(nextItems);
-      setSource(nextSource);
       setLoadState("ready");
       return true;
     }
@@ -161,7 +147,6 @@ export function TripPackingListSection({
       customItems={customItems}
       canRegenerate={canRegenerate}
       canEdit={canEdit}
-      listSource={source}
     />
   );
 }

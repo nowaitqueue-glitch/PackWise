@@ -13,7 +13,6 @@ import {
   addSuitcaseSuggestionsToList,
   scanSuitcase,
 } from "@/app/dashboard/scan-suitcase-actions";
-import { createProCheckoutSession } from "@/app/dashboard/billing-actions";
 import { usePillBanner } from "@/components/pill-banner-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,14 +79,13 @@ export function TripSuitcaseScan({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[] | null>(null);
   const [scansRemaining, setScansRemaining] = useState(initialScansRemaining);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
   const [isAnalyzingOverlay, setIsAnalyzingOverlay] = useState(false);
   const [addedAll, setAddedAll] = useState(false);
   const [expanded, setExpanded] = useState(packedCount >= 1);
   /** Cached so openCamera can stay synchronous and keep the user gesture. */
   const [cameraDenied, setCameraDenied] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [isCheckoutPending, startCheckout] = useTransition();
   const [isAddAllPending, startAddAll] = useTransition();
 
   useEffect(() => {
@@ -145,7 +143,7 @@ export function TripSuitcaseScan({
 
   function openCamera() {
     if (outOfScans) {
-      setUpgradeOpen(true);
+      setLimitDialogOpen(true);
       return;
     }
 
@@ -174,21 +172,6 @@ export function TripSuitcaseScan({
       input.setAttribute("capture", "environment");
     }
     triggerFilePicker(input);
-  }
-
-  function handleUpgradeClick() {
-    setUpgradeOpen(true);
-  }
-
-  function handleStartCheckout() {
-    startCheckout(async () => {
-      const result = await createProCheckoutSession();
-      if (!result.ok) {
-        showBanner({ message: result.error, variant: "error" });
-        return;
-      }
-      window.location.href = result.url;
-    });
   }
 
   function handleFileChange(event: { target: HTMLInputElement }) {
@@ -236,7 +219,7 @@ export function TripSuitcaseScan({
           }
           if (result.code === "SCAN_LIMIT") {
             setScansRemaining(0);
-            setUpgradeOpen(true);
+            setLimitDialogOpen(true);
           }
           return;
         }
@@ -316,7 +299,7 @@ export function TripSuitcaseScan({
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className={sectionTitleClass}>Scan My Suitcase</CardTitle>
               {isPro ? (
-                <Badge variant="pro">Pro · Unlimited</Badge>
+                <Badge variant="pro">Pro</Badge>
               ) : (
                 <Badge variant="secondary" data-testid="suitcase-scans-remaining">
                   {quotaLabel}
@@ -329,9 +312,7 @@ export function TripSuitcaseScan({
                   Snap a photo of your open luggage. AI checks for obviously
                   missing essentials based on this trip&apos;s destination and
                   weather.
-                  {!isPro
-                    ? " Free accounts get 3 scans per month."
-                    : null}
+                  {!isPro ? " Free accounts get 3 scans per month." : null}
                 </>
               ) : packedCount < 1 ? (
                 "Check off at least one packing item first, then open Suitcase Snap."
@@ -368,12 +349,12 @@ export function TripSuitcaseScan({
           <Button
             type="button"
             className="w-full"
-            onClick={handleUpgradeClick}
-            disabled={isCheckoutPending}
-            data-testid="suitcase-upgrade-cta"
+            variant="secondary"
+            onClick={() => setLimitDialogOpen(true)}
+            data-testid="suitcase-limit-cta"
           >
             <Sparkles aria-hidden />
-            Upgrade for unlimited scans
+            Scan limit reached — Pro Coming Soon
           </Button>
         ) : (
           <Button
@@ -495,42 +476,22 @@ export function TripSuitcaseScan({
       </CardContent>
       ) : null}
 
-      <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+      <Dialog open={limitDialogOpen} onOpenChange={setLimitDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upgrade to PackWise Pro</DialogTitle>
+            <DialogTitle>Scan limit reached</DialogTitle>
             <DialogDescription>
-              You&apos;ve used your 3 free suitcase scans this month. Pro unlocks
-              unlimited Suitcase Snap scans so you can check every bag before
-              you leave.
+              You&apos;ve used your 3 free suitcase scans this month. Unlimited
+              Suitcase Snap scans with PackWise Pro — Coming Soon.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               type="button"
-              variant="outline"
-              onClick={() => setUpgradeOpen(false)}
-              disabled={isCheckoutPending}
+              onClick={() => setLimitDialogOpen(false)}
+              data-testid="suitcase-limit-dismiss"
             >
-              Not now
-            </Button>
-            <Button
-              type="button"
-              onClick={handleStartCheckout}
-              disabled={isCheckoutPending}
-              data-testid="suitcase-checkout-button"
-            >
-              {isCheckoutPending ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  Redirecting…
-                </>
-              ) : (
-                <>
-                  <Sparkles aria-hidden />
-                  Upgrade with Stripe
-                </>
-              )}
+              Got it
             </Button>
           </DialogFooter>
         </DialogContent>

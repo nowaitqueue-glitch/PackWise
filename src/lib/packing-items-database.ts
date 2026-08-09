@@ -5,6 +5,8 @@
  * "mandatory", "all", trip-type tags, weather tags, and flight tags.
  */
 
+const AFFILIATE_TAG = "packwise-20"; // TODO: Replace with your real Amazon Associates tag after approval
+
 export const PACKING_CATEGORIES = [
   "Documents",
   "In-Flight",
@@ -116,7 +118,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Empty water bottle (reusable, collapsible)",
     category: "In-Flight",
     tags: ["mandatory", "flight"],
-    affiliateLink: "https://www.amazon.com/s?k=reusable+water+bottle&tag=packwise-placeholder",
+    affiliateLink: `https://www.amazon.com/s?k=collapsible+water+bottle+travel&tag=${AFFILIATE_TAG}`,
     notes: "Fill after security",
   },
   {
@@ -147,21 +149,21 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Eye mask",
     category: "In-Flight",
     tags: ["longFlight"],
-    affiliateLink: "https://www.amazon.com/s?k=eye+mask&tag=packwise-placeholder",
+    affiliateLink: `https://www.amazon.com/s?k=eye+mask+sleep+travel&tag=${AFFILIATE_TAG}`,
     notes: "For sleeping on long flights",
   },
   {
     name: "Neck pillow (inflatable or memory foam)",
     category: "In-Flight",
     tags: ["longFlight"],
-    affiliateLink: "https://geni.us/packwise-neck-pillow",
+    affiliateLink: `https://www.amazon.com/s?k=neck+pillow+travel&tag=${AFFILIATE_TAG}`,
     notes: "Support for napping upright in your seat",
   },
   {
     name: "Compression socks",
     category: "In-Flight",
     tags: ["longFlight"],
-    affiliateLink: "https://geni.us/packwise-compression-socks",
+    affiliateLink: `https://www.amazon.com/s?k=compression+socks+travel&tag=${AFFILIATE_TAG}`,
     notes: "Improves circulation on long flights",
   },
   {
@@ -288,7 +290,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Waterproof rain jacket",
     category: "Clothing",
     tags: ["rain", "humid"],
-    affiliateLink: "https://geni.us/packwise-rain-jacket",
+    affiliateLink: `https://www.amazon.com/s?k=packable+rain+jacket&tag=${AFFILIATE_TAG}`,
     notes: "Packable shell to stay dry",
   },
   {
@@ -577,7 +579,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     tags: ["mandatory", "all"],
     quantityMode: "per_person_consumable",
     quantityRule: { type: "fixed", value: 1 },
-    affiliateLink: "https://geni.us/packwise-toiletry-bag",
+    affiliateLink: `https://www.amazon.com/s?k=travel+toiletry+bag&tag=${AFFILIATE_TAG}`,
     notes: "Toothbrush, toothpaste, deodorant, basic skincare",
   },
   {
@@ -586,7 +588,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     tags: ["UV", "hot", "beach", "ski"],
     quantityMode: "per_person_consumable",
     quantityRule: { type: "fixed", value: 1 },
-    affiliateLink: "https://geni.us/packwise-sunscreen",
+    affiliateLink: `https://www.amazon.com/s?k=sunscreen+travel+size&tag=${AFFILIATE_TAG}`,
     notes: "Reapply often; reef-safe if swimming outdoors",
   },
   {
@@ -704,14 +706,14 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Universal power adapter",
     category: "Electronics",
     tags: ["mandatory", "all"],
-    affiliateLink: "https://geni.us/packwise-universal-adapter",
+    affiliateLink: `https://www.amazon.com/s?k=universal+travel+adapter&tag=${AFFILIATE_TAG}`,
     notes: "Covers the destination's plug type",
   },
   {
     name: "Power bank",
     category: "Electronics",
     tags: ["mandatory", "all"],
-    affiliateLink: "https://geni.us/packwise-power-bank",
+    affiliateLink: `https://www.amazon.com/s?k=portable+charger+power+bank&tag=${AFFILIATE_TAG}`,
     notes: "For long travel days and sightseeing",
   },
   {
@@ -800,7 +802,7 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Quick-dry travel towel",
     category: "Comfort",
     tags: ["humid", "hiking", "longTrip"],
-    affiliateLink: "https://geni.us/packwise-quick-dry-towel",
+    affiliateLink: `https://www.amazon.com/s?k=quick+dry+towel+travel&tag=${AFFILIATE_TAG}`,
     notes: "Dries fast in humid conditions",
   },
 
@@ -901,14 +903,14 @@ export const PACKING_ITEMS: PackingDatabaseItem[] = [
     name: "Packing cubes",
     category: "Miscellaneous",
     tags: ["longTrip", "all"],
-    affiliateLink: "https://geni.us/packwise-packing-cubes",
+    affiliateLink: `https://www.amazon.com/s?k=packing+cubes&tag=${AFFILIATE_TAG}`,
     notes: "Keep a longer trip's clothes organized",
   },
   {
     name: "Luggage scale",
     category: "Miscellaneous",
     tags: ["flight", "all"],
-    affiliateLink: "https://geni.us/packwise-luggage-scale",
+    affiliateLink: `https://www.amazon.com/s?k=luggage+scale&tag=${AFFILIATE_TAG}`,
     notes: "Avoid airline overweight fees before you leave",
   },
   {
