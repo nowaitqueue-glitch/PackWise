@@ -13,41 +13,42 @@ type SettingsNotificationsProps = {
 };
 
 export function SettingsNotifications({
-  showPackingReminder: _showPackingReminder,
-  packingReminderEmail: _initialPackingReminder,
+  // TODO: Re-enable when Resend is configured
+  // showPackingReminder: _showPackingReminder,
+  // packingReminderEmail: _initialPackingReminder,
   pushNotifications: initialPush,
 }: SettingsNotificationsProps) {
   const { showBanner } = usePillBanner();
+  // TODO: Re-enable when Resend is configured
+  // const [packingReminder, setPackingReminder] = useState(_initialPackingReminder);
   const [pushEnabled, setPushEnabled] = useState(initialPush);
   const [isPending, startTransition] = useTransition();
 
+  // TODO: Re-enable when Resend is configured
+  // function savePrefs(next: {
+  //   packingReminderEmail?: boolean;
+  //   pushNotifications?: boolean;
+  // }) {
+  //   startTransition(async () => {
+  //     const result = await updateNotificationPrefs(next);
+  //     if (!result.ok) {
+  //       showBanner({ message: result.error, variant: "error" });
+  //       if (typeof next.packingReminderEmail === "boolean") {
+  //         setPackingReminder(!next.packingReminderEmail);
+  //       }
+  //       if (typeof next.pushNotifications === "boolean") {
+  //         setPushEnabled(!next.pushNotifications);
+  //       }
+  //       return;
+  //     }
+  //     showBanner({ message: "Preferences saved.", variant: "success" });
+  //   });
+  // }
+
   return (
     <div className="divide-y divide-slate-900/5 dark:divide-white/10">
-      {/* TODO: Enable when Resend API key is configured in production
-          Requires RESEND_API_KEY in Vercel env vars and verified sending domain */}
-      {/*
-      const [packingReminder, setPackingReminder] = useState(_initialPackingReminder);
-
-      function savePrefs(next: {
-        packingReminderEmail?: boolean;
-        pushNotifications?: boolean;
-      }) {
-        startTransition(async () => {
-          const result = await updateNotificationPrefs(next);
-          if (!result.ok) {
-            showBanner({ message: result.error, variant: "error" });
-            if (typeof next.packingReminderEmail === "boolean") {
-              setPackingReminder(!next.packingReminderEmail);
-            }
-            if (typeof next.pushNotifications === "boolean") {
-              setPushEnabled(!next.pushNotifications);
-            }
-            return;
-          }
-          showBanner({ message: "Preferences saved.", variant: "success" });
-        });
-      }
-
+      {/* TODO: Re-enable when Resend is configured
+          Requires RESEND_API_KEY in Vercel env vars and verified sending domain
       {_showPackingReminder ? (
         <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
           <div className="min-w-0 space-y-1">
