@@ -15,9 +15,11 @@ export function buildContentSecurityPolicy(nonce: string): string {
   const scriptSrc = [
     "'self'",
     `'nonce-${nonce}'`,
+    // Next.js runtime (and some third-party scripts) may call eval/new Function.
+    // Kept alongside nonce + strict-dynamic so CSP3 browsers still prefer the
+    // nonce path while allowing framework eval when needed.
+    "'unsafe-eval'",
     "'strict-dynamic'",
-    // Next.js webpack HMR / React debug need eval in development only.
-    ...(isDev ? ["'unsafe-eval'"] : []),
     "https://js.stripe.com",
     "https://plausible.io",
   ];

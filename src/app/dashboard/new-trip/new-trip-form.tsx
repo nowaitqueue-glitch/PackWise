@@ -382,15 +382,14 @@ export function NewTripForm({
                   </span>
                 </FormLabel>
                 <FormControl>
-                  <div className="w-full">
-                    <CountryCombobox
-                      value={field.value}
-                      onChange={(code) => {
-                        field.onChange(code);
-                        form.setValue("city", "");
-                      }}
-                    />
-                  </div>
+                  <CountryCombobox
+                    className="w-full"
+                    value={field.value}
+                    onChange={(code) => {
+                      field.onChange(code);
+                      form.setValue("city", "");
+                    }}
+                  />
                 </FormControl>
                 <FormDescription>
                   Optional — narrows city suggestions. You can leave this blank
@@ -408,14 +407,13 @@ export function NewTripForm({
               <FormItem>
                 <FormLabel className={labelClass}>City</FormLabel>
                 <FormControl>
-                  <div className="w-full">
-                    <CityCombobox
-                      value={field.value}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      countryCode={countryCode}
-                    />
-                  </div>
+                  <CityCombobox
+                    className="w-full"
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    countryCode={countryCode}
+                  />
                 </FormControl>
                 <FormDescription>
                   {countryCode.trim()

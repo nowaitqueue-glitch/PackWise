@@ -53,8 +53,11 @@ export function TripsBatchActionBar() {
     return null;
   }
 
-  const count = list.selectedTrips.length;
-  const label = count === 1 ? "Delete 1 trip" : `Delete ${count} trips`;
+  const tripCount = list.selectedTrips.length;
+  const title =
+    tripCount === 1 ? "Delete this trip?" : `Delete ${tripCount} trips?`;
+  const buttonText =
+    tripCount === 1 ? "Delete trip" : `Delete ${tripCount} trips`;
 
   return (
     <>
@@ -72,10 +75,13 @@ export function TripsBatchActionBar() {
           variant="destructive"
           className="min-w-0 flex-1"
           disabled={isPending}
-          onClick={() => setConfirmOpen(true)}
+          onClick={() => {
+            if (tripCount === 0) return;
+            setConfirmOpen(true);
+          }}
         >
           <Trash2 aria-hidden />
-          <span className="truncate">{label}</span>
+          <span className="truncate">{buttonText}</span>
         </Button>
         <Button
           type="button"
@@ -88,20 +94,18 @@ export function TripsBatchActionBar() {
       </div>
 
       <AlertDialog
-        open={confirmOpen}
+        open={confirmOpen && tripCount > 0}
         onOpenChange={(next) => {
           if (isPending) return;
+          if (next && tripCount === 0) return;
           setConfirmOpen(next);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {count === 1 ? "Delete 1 trip?" : `Delete ${count} trips?`}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
             <AlertDialogDescription>
-              This cannot be undone. Packing lists and weather data for the
-              selected trips will be permanently removed.
+              This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -112,6 +116,7 @@ export function TripsBatchActionBar() {
               disabled={isPending}
               onClick={() => {
                 const ids = [...list.selectedTrips];
+                if (ids.length === 0) return;
                 startTransition(async () => {
                   setConfirmOpen(false);
                   list.clearSelection();
@@ -147,7 +152,7 @@ export function TripsBatchActionBar() {
                   Deleting…
                 </>
               ) : (
-                label
+                buttonText
               )}
             </Button>
           </AlertDialogFooter>
