@@ -126,6 +126,12 @@ export default function RootLayout({
                 nonce={nonce}
               >
                 {children}
+                <footer className="py-4 text-center">
+                  <p className="text-[10px] text-muted-foreground">
+                    As an Amazon Associate, PackWise earns from qualifying
+                    purchases.
+                  </p>
+                </footer>
                 <CookieConsentBanner />
                 <Analytics nonce={nonce} />
               </ThemeProvider>

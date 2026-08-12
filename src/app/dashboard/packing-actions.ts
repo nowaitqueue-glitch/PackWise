@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/error-reporting";
 import {
   PackingError,
   normalizePackingItemsForStorage,
@@ -24,6 +25,35 @@ import {
   isKnownForecastDay,
   type WeatherForecastResult,
 } from "@/lib/weather";
+
+const PACKING_GENERATE_FRIENDLY_ERROR =
+  "Couldn't generate packing list. Please try again.";
+
+/** Compact weather context for logs (no secrets / PII beyond trip destination). */
+function summarizeWeatherForLog(weather: WeatherForecastResult | null) {
+  if (!weather) {
+    return { available: false as const };
+  }
+
+  const knownDays = weather.days.filter(isKnownForecastDay);
+  const highs = knownDays
+    .map((day) => day.highTemp)
+    .filter((temp): temp is number => typeof temp === "number");
+  const lows = knownDays
+    .map((day) => day.lowTemp)
+    .filter((temp): temp is number => typeof temp === "number");
+
+  return {
+    available: true as const,
+    locationName: weather.locationName,
+    dayCount: weather.days.length,
+    knownDayCount: knownDays.length,
+    highTempMin: highs.length ? Math.min(...highs) : null,
+    highTempMax: highs.length ? Math.max(...highs) : null,
+    lowTempMin: lows.length ? Math.min(...lows) : null,
+    lowTempMax: lows.length ? Math.max(...lows) : null,
+  };
+}
 
 type GeneratePackingListResult =
   | { ok: true; items: PackingItem[]; source: PackingListSource }
@@ -80,13 +110,26 @@ async function fetchTripWeather(
     return weather.data;
   }
 
+  console.info("[packing] trip weather unavailable, trying direct forecast", {
+    tripId,
+    error: weather.error,
+    code: weather.code,
+  });
+
   try {
     return await getWeatherForecast({
       destination: trip.destination,
       startDate: trip.startDate,
       endDate: trip.endDate,
     });
-  } catch {
+  } catch (error) {
+    console.info(
+      "[packing] direct weather forecast failed; continuing without weather",
+      {
+        tripId,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    );
     return null;
   }
 }
@@ -282,30 +325,88 @@ export async function generateAndStorePackingList(params: {
   /** Optional client (e.g. Bearer JWT) so API routes can upsert under RLS. */
   supabase?: SupabaseClient;
 }): Promise<GeneratePackingListResult> {
+  const tripContext = {
+    tripId: params.tripId,
+    destination: params.trip.destination,
+    tripType: params.trip.tripType,
+    startDate: params.trip.startDate,
+    endDate: params.trip.endDate,
+    travelers: params.trip.travelers,
+  };
+
+  console.info("[packing] generate start", tripContext);
+
   try {
     const weather = await fetchTripWeather(params.tripId, params.trip);
+    const weatherSummary = summarizeWeatherForLog(weather);
+    console.info("[packing] weather ready", {
+      tripId: params.tripId,
+      weather: weatherSummary,
+    });
+
     const items = buildTagBasedPackingList(params.trip, weather);
     const source: PackingListSource = "template";
+    console.info("[packing] items built", {
+      tripId: params.tripId,
+      itemCount: items.length,
+      source,
+      weather: weatherSummary,
+    });
 
     const { error } = await upsertPackingList(params.tripId, items, {
       supabaseClient: params.supabase,
       source,
     });
     if (error) {
-      return { ok: false, error, code: "GENERATION_FAILED" };
+      console.error("[packing] upsert failed", {
+        ...tripContext,
+        itemCount: items.length,
+        weather: weatherSummary,
+        error,
+      });
+      reportError(new Error(error), {
+        context: "packing_generate_upsert",
+        ...tripContext,
+        itemCount: items.length,
+        weather: weatherSummary,
+      });
+      return {
+        ok: false,
+        error: PACKING_GENERATE_FRIENDLY_ERROR,
+        code: "GENERATION_FAILED",
+      };
     }
 
+    console.info("[packing] generate success", {
+      tripId: params.tripId,
+      itemCount: items.length,
+      source,
+      weather: weatherSummary,
+    });
     return { ok: true, items, source };
   } catch (error) {
     if (error instanceof PackingError) {
+      console.error("[packing] generate PackingError", {
+        ...tripContext,
+        code: error.code,
+        error: error.message,
+      });
+      reportError(error, {
+        context: "packing_generate",
+        ...tripContext,
+        code: error.code,
+      });
       return { ok: false, error: error.message, code: error.code };
     }
+
+    console.error("[packing] generate unexpected error", tripContext, error);
+    reportError(error, {
+      context: "packing_generate",
+      ...tripContext,
+    });
     return {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Unexpected error generating packing list.",
+      error: PACKING_GENERATE_FRIENDLY_ERROR,
       code: "GENERATION_FAILED",
     };
   }
@@ -376,26 +477,55 @@ export async function generatePackingListInBackground(
   const accessToken = session?.access_token?.trim();
 
   if (accessToken) {
-    const origin = await resolveAppOrigin();
-    const url = `${origin}/api/packing/generate`;
-    void fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ tripId: id }),
-    }).catch((error) => {
-      console.error("[packing] background generate kickoff failed", error);
-    });
+    try {
+      const origin = await resolveAppOrigin();
+      const url = `${origin}/api/packing/generate`;
+      console.info("[packing] background kickoff", { tripId: id, url });
+      void fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tripId: id }),
+      }).catch((error) => {
+        console.error("[packing] background generate kickoff failed", {
+          tripId: id,
+          error,
+        });
+        reportError(error, {
+          context: "packing_background_kickoff",
+          tripId: id,
+        });
+      });
+    } catch (error) {
+      console.error("[packing] background generate kickoff failed", {
+        tripId: id,
+        error,
+      });
+      reportError(error, {
+        context: "packing_background_kickoff",
+        tripId: id,
+      });
+    }
     return;
   }
 
   // No JWT available — best-effort in-process (may be truncated on serverless).
+  console.info("[packing] background in-process fallback", { tripId: id });
   void (async () => {
     const result = await generatePackingListAction(id);
     if (!result.ok) {
-      console.error("[packing] background generate failed", result.error);
+      console.error("[packing] background generate failed", {
+        tripId: id,
+        error: result.error,
+        code: result.code,
+      });
+      reportError(new Error(result.error), {
+        context: "packing_background_generate",
+        tripId: id,
+        code: result.code,
+      });
       return;
     }
     revalidatePath(`/dashboard/trips/${id}`);
@@ -409,44 +539,55 @@ export async function generatePackingListInBackground(
 export async function regeneratePackingList(
   tripId: string
 ): Promise<RegeneratePackingListResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { ok: false, error: "You must be signed in." };
+    if (!user) {
+      return { ok: false, error: "You must be signed in." };
+    }
+
+    const { data: trip, error: tripError } = await supabase
+      .from("trips")
+      .select(
+        "id, user_id, destination, start_date, end_date, trip_type, travelers"
+      )
+      .eq("id", tripId)
+      .maybeSingle();
+
+    if (tripError || !trip) {
+      return { ok: false, error: "Trip not found." };
+    }
+
+    if (trip.user_id !== user.id) {
+      return {
+        ok: false,
+        error: "Only the trip owner can regenerate the list.",
+      };
+    }
+
+    const result = await generateAndStorePackingList({
+      tripId: trip.id,
+      trip: {
+        destination: trip.destination,
+        startDate: trip.start_date,
+        endDate: trip.end_date,
+        tripType: trip.trip_type,
+        travelers: trip.travelers,
+      },
+    });
+
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+
+    revalidatePath(`/dashboard/trips/${tripId}`);
+    return { ok: true, source: result.source, items: result.items };
+  } catch (error) {
+    console.error("[packing] regenerate unexpected error", { tripId }, error);
+    reportError(error, { context: "packing_regenerate", tripId });
+    return { ok: false, error: PACKING_GENERATE_FRIENDLY_ERROR };
   }
-
-  const { data: trip, error: tripError } = await supabase
-    .from("trips")
-    .select("id, user_id, destination, start_date, end_date, trip_type, travelers")
-    .eq("id", tripId)
-    .maybeSingle();
-
-  if (tripError || !trip) {
-    return { ok: false, error: "Trip not found." };
-  }
-
-  if (trip.user_id !== user.id) {
-    return { ok: false, error: "Only the trip owner can regenerate the list." };
-  }
-
-  const result = await generateAndStorePackingList({
-    tripId: trip.id,
-    trip: {
-      destination: trip.destination,
-      startDate: trip.start_date,
-      endDate: trip.end_date,
-      tripType: trip.trip_type,
-      travelers: trip.travelers,
-    },
-  });
-
-  if (!result.ok) {
-    return { ok: false, error: result.error };
-  }
-
-  revalidatePath(`/dashboard/trips/${tripId}`);
-  return { ok: true, source: result.source, items: result.items };
 }

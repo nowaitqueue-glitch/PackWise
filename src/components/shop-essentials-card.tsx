@@ -23,9 +23,6 @@ export function ShopEssentialsCard() {
           </a>
         </div>
       </div>
-      <p className="text-[10px] text-amber-400/70 dark:text-amber-500/50 mt-3 text-right">
-        As an Amazon Associate, PackWise may earn from qualifying purchases.
-      </p>
     </div>
   );
 }

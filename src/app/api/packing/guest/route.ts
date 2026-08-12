@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClientIp } from "@/lib/client-ip";
+import { reportError } from "@/lib/error-reporting";
 import {
   normalizePackingItemsForStorage,
   type PackingItem,
@@ -174,19 +175,58 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  let weather: WeatherForecastResult | null = null;
+  const tripContext = {
+    destination: parsed.destination,
+    tripType: parsed.tripType,
+    startDate: parsed.startDate,
+    endDate: parsed.endDate,
+    travelers: parsed.travelers,
+  };
+
   try {
-    weather = await getWeatherForecast({
-      destination: parsed.destination,
-      startDate: parsed.startDate,
-      endDate: parsed.endDate,
+    console.info("[packing] guest generate start", tripContext);
+
+    let weather: WeatherForecastResult | null = null;
+    try {
+      weather = await getWeatherForecast({
+        destination: parsed.destination,
+        startDate: parsed.startDate,
+        endDate: parsed.endDate,
+      });
+    } catch (error) {
+      // Weather is optional for packing; continue with template defaults.
+      console.info(
+        "[packing] guest weather failed; continuing without weather",
+        {
+          ...tripContext,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
+      weather = null;
+    }
+
+    const items = buildGuestItems(parsed, weather);
+    console.info("[packing] guest generate success", {
+      ...tripContext,
+      itemCount: items.length,
+      weatherAvailable: weather != null,
+      weatherDayCount: weather?.days.length ?? 0,
     });
-  } catch {
-    // Weather is optional for packing; continue with template defaults.
-    weather = null;
+
+    return NextResponse.json({ items, weather });
+  } catch (error) {
+    console.error(
+      "[packing] guest generate unexpected error",
+      tripContext,
+      error
+    );
+    reportError(error, {
+      context: "packing_guest_generate",
+      ...tripContext,
+    });
+    return NextResponse.json(
+      { error: "Couldn't generate packing list. Please try again." },
+      { status: 500 }
+    );
   }
-
-  const items = buildGuestItems(parsed, weather);
-
-  return NextResponse.json({ items, weather });
 }
