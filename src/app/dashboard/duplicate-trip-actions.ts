@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { generatePackingListInBackground } from "@/app/dashboard/packing-actions";
 
 export type DuplicateTripResult =
   | { ok: true; tripId: string }
@@ -12,7 +11,7 @@ export type DuplicateTripResult =
 /**
  * Copies an accessible trip (owned or shared) into a new trip owned by the
  * current user. Dates and other fields are copied as-is; packing list is
- * generated best-effort like the create-trip flow.
+ * generated on the trip detail page (same path as create-trip).
  */
 export async function duplicateTrip(
   tripId: string
@@ -59,9 +58,7 @@ export async function duplicateTrip(
     };
   }
 
-  // Kick off packing in the background — do not block redirect.
-  await generatePackingListInBackground(created.id);
-
+  // Packing auto-generates on trip detail via regeneratePackingList.
   revalidatePath("/dashboard");
   redirect(`/dashboard/trips/${created.id}?duplicated=1`);
 }

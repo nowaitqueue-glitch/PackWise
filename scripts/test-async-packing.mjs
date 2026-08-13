@@ -92,7 +92,7 @@ async function main() {
 
   console.log(`  Trip insert: ${insertMs}ms (id=${trip.id})`);
 
-  // Mimic generatePackingListInBackground: fire-and-forget generate, don't await body.
+  // API client path: fire-and-forget generate (trip create uses client regenerate instead).
   const kickoffStarted = Date.now();
   const generatePromise = fetch(`${BASE_URL}/api/packing/generate`, {
     method: "POST",

@@ -285,6 +285,7 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
           canRegenerate={isOwner}
           canEdit={isOwner}
           expectPending={expectPendingPacking && packingItems.length === 0}
+          tripCreatedAt={trip.created_at}
         />
 
         {/* Suitcase Snap — temporarily hidden; restore TripSuitcaseScan + getScanQuota to re-enable

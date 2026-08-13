@@ -144,7 +144,7 @@ test.describe("PackWise packing flow", () => {
     await page.getByTestId("travelers-input").fill("1");
     await page.getByTestId("create-trip-submit").click();
 
-    // Create redirects immediately; packing list generates in the background.
+    // Create redirects immediately; packing list auto-generates on trip detail.
     await expect(page).toHaveURL(/\/dashboard\/trips\/[^/]+/, {
       timeout: 30_000,
     });
@@ -152,7 +152,7 @@ test.describe("PackWise packing flow", () => {
     const tripUrl = page.url();
     const tripId = tripUrl.split("/").pop()?.split("?")[0]!;
 
-    // Pending UI while background generation runs, then the real list.
+    // Pending UI while client calls regeneratePackingList, then the real list.
     // Next can leave a hidden duplicate of the trip segment in the DOM during
     // the server-action redirect, so scope to .first() for strict mode.
     const generating = page.getByTestId("packing-list-generating").first();

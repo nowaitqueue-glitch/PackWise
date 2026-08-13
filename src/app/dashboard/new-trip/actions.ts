@@ -4,10 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isTripType } from "@/lib/trips";
-import {
-  generateAndStorePackingList,
-  generatePackingListInBackground,
-} from "@/app/dashboard/packing-actions";
+import { generateAndStorePackingList } from "@/app/dashboard/packing-actions";
 import { isValidCountryCode } from "@/lib/countries";
 import {
   composeDestination,
@@ -121,9 +118,9 @@ export async function createTrip(
     return { error: error?.message ?? "Could not create trip." };
   }
 
-  // Kick off packing in the background — do not block redirect.
-  await generatePackingListInBackground(data.id);
-
+  // Packing is generated on the trip detail page via the same
+  // regeneratePackingList action as the manual Generate button (avoids a
+  // fragile internal HTTP kickoff that often fails after redirect).
   redirect(`/dashboard/trips/${data.id}?created=1`);
 }
 

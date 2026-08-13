@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { regeneratePackingList } from "@/app/dashboard/packing-actions";
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
-import { parsePackingItems, type PackingItem } from "@/lib/packing";
+import { type PackingItem } from "@/lib/packing";
 import { cn, glassChip } from "@/lib/utils";
 
 const TripPackingList = dynamic(
@@ -18,8 +18,8 @@ const TripPackingList = dynamic(
   }
 );
 
-const POLL_INTERVAL_MS = 1_500;
-const POLL_TIMEOUT_MS = 45_000;
+/** Auto-generate only for trips created within this window. */
+const AUTO_GENERATE_MAX_AGE_MS = 5 * 60 * 1000;
 
 type TripPackingListSectionProps = {
   tripId: string;
@@ -31,13 +31,22 @@ type TripPackingListSectionProps = {
   /** Owner-only; members see read-only checkboxes. */
   canEdit?: boolean;
   /**
-   * When true and the list is still empty, show a skeleton and poll until
-   * items appear (or timeout → regenerate CTA).
+   * When true and the list is still empty, kick off the same generate action
+   * as the manual Regenerate button (used after create/duplicate redirects).
    */
   expectPending?: boolean;
+  /** ISO timestamp from trips.created_at — enables the ~5 minute auto-gen window. */
+  tripCreatedAt?: string | null;
 };
 
 type LoadState = "ready" | "pending" | "failed";
+
+function isRecentlyCreated(tripCreatedAt: string | null | undefined): boolean {
+  if (!tripCreatedAt) return false;
+  const createdMs = Date.parse(tripCreatedAt);
+  if (!Number.isFinite(createdMs)) return false;
+  return Date.now() - createdMs <= AUTO_GENERATE_MAX_AGE_MS;
+}
 
 export function TripPackingListSection({
   tripId,
@@ -46,80 +55,58 @@ export function TripPackingListSection({
   canRegenerate = true,
   canEdit = true,
   expectPending = false,
+  tripCreatedAt = null,
 }: TripPackingListSectionProps) {
+  const shouldAutoGenerate =
+    canRegenerate &&
+    initialItems.length === 0 &&
+    (expectPending || isRecentlyCreated(tripCreatedAt));
+
   const [items, setItems] = useState(initialItems);
-  const [loadState, setLoadState] = useState<LoadState>(() => {
-    if (initialItems.length > 0) return "ready";
-    if (expectPending) return "pending";
-    return "ready";
-  });
+  const [loadState, setLoadState] = useState<LoadState>(() =>
+    shouldAutoGenerate ? "pending" : "ready"
+  );
 
   useEffect(() => {
     setItems(initialItems);
     if (initialItems.length > 0) {
       setLoadState("ready");
-    } else if (expectPending) {
+      return;
+    }
+    if (shouldAutoGenerate) {
+      // Preserve failure so we do not retry in a loop after a failed attempt.
       setLoadState((current) => (current === "failed" ? current : "pending"));
     }
-  }, [initialItems, expectPending]);
+  }, [initialItems, shouldAutoGenerate]);
 
   useEffect(() => {
-    if (loadState !== "pending") {
+    if (loadState !== "pending" || !canRegenerate) {
       return;
     }
 
-    let cancelled = false;
-    const supabase = createClient();
-    const startedAt = Date.now();
+    console.info("[packing] client auto-generate start", { tripId });
 
-    async function pollOnce(): Promise<boolean> {
-      const { data, error } = await supabase
-        .from("packing_lists")
-        .select("items")
-        .eq("trip_id", tripId)
-        .maybeSingle();
-
-      if (cancelled) return true;
-      if (error) {
-        return false;
+    // Same server action as the Regenerate button. No cancel flag: Strict Mode
+    // remounts must still land a result (upsert is idempotent if run twice).
+    void regeneratePackingList(tripId).then((result) => {
+      if (!result.ok) {
+        console.error("[packing] client auto-generate failed", {
+          tripId,
+          error: result.error,
+        });
+        setLoadState("failed");
+        return;
       }
 
-      const nextItems = parsePackingItems(data?.items);
-      if (nextItems.length === 0) {
-        return false;
-      }
-
-      setItems(nextItems);
+      console.info("[packing] client auto-generate success", {
+        tripId,
+        itemCount: result.items.length,
+        source: result.source,
+      });
+      setItems(result.items);
       setLoadState("ready");
-      return true;
-    }
-
-    void pollOnce();
-
-    const intervalId = window.setInterval(() => {
-      void (async () => {
-        const done = await pollOnce();
-        if (done || cancelled) {
-          return;
-        }
-        if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
-          setLoadState("failed");
-        }
-      })();
-    }, POLL_INTERVAL_MS);
-
-    const timeoutId = window.setTimeout(() => {
-      if (!cancelled) {
-        setLoadState((current) => (current === "pending" ? "failed" : current));
-      }
-    }, POLL_TIMEOUT_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-      window.clearTimeout(timeoutId);
-    };
-  }, [loadState, tripId]);
+    });
+  }, [loadState, tripId, canRegenerate]);
 
   if (loadState === "pending") {
     return (
@@ -133,7 +120,7 @@ export function TripPackingListSection({
           data-testid="packing-list-generating"
         >
           <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
-          Generating…
+          Generating your packing list...
         </p>
         <TripPackingListSkeleton />
       </div>

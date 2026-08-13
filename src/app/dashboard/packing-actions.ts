@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/error-reporting";
@@ -68,37 +67,8 @@ type UpdatePackingItemPackedResult =
   | { ok: false; error: string };
 
 /**
- * Origin for internal packing kickoff.
- * Priority: NEXT_PUBLIC_APP_URL (always; headers ignored) →
- * request host / localhost:3000 (dev only).
- * Throws in production when NEXT_PUBLIC_APP_URL is unset.
- */
-async function resolveAppOrigin(): Promise<string> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (appUrl) {
-    return appUrl.replace(/\/$/, "");
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      const headerStore = await headers();
-      const host =
-        headerStore.get("host")?.split(",")[0]?.trim() ||
-        headerStore.get("x-forwarded-host")?.split(",")[0]?.trim() ||
-        "localhost:3000";
-      return `http://${host}`;
-    } catch {
-      // headers() unavailable outside a request context
-      return "http://localhost:3000";
-    }
-  }
-
-  throw new Error("NEXT_PUBLIC_APP_URL must be set in production");
-}
-
-/**
  * Prefer session-scoped trip weather; fall back to a direct forecast so
- * Bearer / background jobs still get weather-aware lists when cookies
+ * Bearer / API clients still get weather-aware lists when cookies
  * are unavailable.
  */
 async function fetchTripWeather(
@@ -414,8 +384,7 @@ export async function generateAndStorePackingList(params: {
 
 /**
  * tripId-only wrapper: load the trip, generate packing, upsert packing_lists.
- * Used by the authenticated generate API; create/duplicate kick off via
- * {@link generatePackingListInBackground} instead of awaiting this.
+ * Used by the authenticated generate API (`POST /api/packing/generate`).
  */
 export async function generatePackingListAction(
   tripId: string,
@@ -455,86 +424,9 @@ export async function generatePackingListAction(
 }
 
 /**
- * Starts packing list generation without waiting for it to finish.
- * Fire-and-forget POST to `/api/packing/generate` (Bearer JWT) so a separate
- * invocation can finish after the create/redirect response returns.
- *
- * Falls back to an in-process generate if no access token is available
- * (may be truncated on serverless once the parent response completes).
- */
-export async function generatePackingListInBackground(
-  tripId: string
-): Promise<void> {
-  const id = tripId?.trim();
-  if (!id) {
-    return;
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const accessToken = session?.access_token?.trim();
-
-  if (accessToken) {
-    try {
-      const origin = await resolveAppOrigin();
-      const url = `${origin}/api/packing/generate`;
-      console.info("[packing] background kickoff", { tripId: id, url });
-      void fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ tripId: id }),
-      }).catch((error) => {
-        console.error("[packing] background generate kickoff failed", {
-          tripId: id,
-          error,
-        });
-        reportError(error, {
-          context: "packing_background_kickoff",
-          tripId: id,
-        });
-      });
-    } catch (error) {
-      console.error("[packing] background generate kickoff failed", {
-        tripId: id,
-        error,
-      });
-      reportError(error, {
-        context: "packing_background_kickoff",
-        tripId: id,
-      });
-    }
-    return;
-  }
-
-  // No JWT available — best-effort in-process (may be truncated on serverless).
-  console.info("[packing] background in-process fallback", { tripId: id });
-  void (async () => {
-    const result = await generatePackingListAction(id);
-    if (!result.ok) {
-      console.error("[packing] background generate failed", {
-        tripId: id,
-        error: result.error,
-        code: result.code,
-      });
-      reportError(new Error(result.error), {
-        context: "packing_background_generate",
-        tripId: id,
-        code: result.code,
-      });
-      return;
-    }
-    revalidatePath(`/dashboard/trips/${id}`);
-  })();
-}
-
-/**
  * Re-runs weather-aware tag-based packing list generation for an existing trip.
  * Owner-only (members can view the list but not regenerate or check items off).
+ * Also used by trip-detail auto-generate after create/duplicate.
  */
 export async function regeneratePackingList(
   tripId: string
@@ -568,6 +460,8 @@ export async function regeneratePackingList(
       };
     }
 
+    console.info("[packing] regenerate start", { tripId: trip.id });
+
     const result = await generateAndStorePackingList({
       tripId: trip.id,
       trip: {
@@ -580,6 +474,11 @@ export async function regeneratePackingList(
     });
 
     if (!result.ok) {
+      console.error("[packing] regenerate failed", {
+        tripId: trip.id,
+        error: result.error,
+        code: result.code,
+      });
       return { ok: false, error: result.error };
     }
 
