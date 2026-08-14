@@ -109,18 +109,6 @@ export default async function SettingsPage() {
 
   const email = user?.email ?? "";
 
-  const { data: profile } = user
-    ? await supabase
-        .from("profiles")
-        .select("packing_reminder_email, push_notifications")
-        .eq("id", user.id)
-        .maybeSingle()
-    : { data: null };
-
-  const packingReminderEmail =
-    profile?.packing_reminder_email !== false;
-  const pushNotifications = profile?.push_notifications !== false;
-
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:py-12">
       <header className="mb-8 flex flex-col gap-4 sm:mb-10">
@@ -165,11 +153,7 @@ export default async function SettingsPage() {
           title="Notifications"
           description="Choose how PackWise can reach you about upcoming trips."
         >
-          <SettingsNotifications
-            showPackingReminder
-            packingReminderEmail={packingReminderEmail}
-            pushNotifications={pushNotifications}
-          />
+          <SettingsNotifications />
         </SettingsSection>
 
         <SettingsSection

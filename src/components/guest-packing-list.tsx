@@ -63,7 +63,7 @@ export function GuestPackingList({
   onPackedChange,
 }: GuestPackingListProps) {
   const { showBanner } = usePillBanner();
-  const [generated, setGenerated] = useState(() =>
+  const [generated, setGenerated] = useState<PackingItem[]>(() =>
     initialItems
       .filter((item) => !item.isCustom)
       .map((item) => ({

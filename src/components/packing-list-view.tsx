@@ -363,6 +363,7 @@ export function PackingListView({
   }, [celebrationKey, progress.percent, progress.total, showBanner]);
 
   useEffect(() => {
+    const removeTimers = removeTimersRef.current;
     return () => {
       if (gradientTimerRef.current) {
         clearTimeout(gradientTimerRef.current);
@@ -370,10 +371,10 @@ export function PackingListView({
       if (installTimerRef.current) {
         clearTimeout(installTimerRef.current);
       }
-      for (const timer of Array.from(removeTimersRef.current.values())) {
+      for (const timer of Array.from(removeTimers.values())) {
         clearTimeout(timer);
       }
-      removeTimersRef.current.clear();
+      removeTimers.clear();
       for (const timer of batchTimersRef.current) {
         clearTimeout(timer);
       }

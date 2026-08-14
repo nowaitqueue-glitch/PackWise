@@ -1,16 +1,10 @@
 "use client";
 
-type SettingsNotificationsProps = {
-  showPackingReminder: boolean;
-  packingReminderEmail: boolean;
-  pushNotifications: boolean;
-};
-
 /**
  * Notification prefs UI. Packing reminders and push are Coming Soon —
  * no working toggles until Resend / push delivery ship.
  */
-export function SettingsNotifications(_props: SettingsNotificationsProps) {
+export function SettingsNotifications() {
   return (
     <div className="divide-y divide-slate-900/5 dark:divide-white/10">
       <div className="space-y-1 py-4 first:pt-0 last:pb-0">
