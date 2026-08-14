@@ -5,7 +5,8 @@
  * "mandatory", "all", trip-type tags, weather tags, and flight tags.
  */
 
-const AFFILIATE_TAG = "packwise-20"; // TODO: Replace with your real Amazon Associates tag after approval
+/** Amazon Associates tag. Per-item affiliate icons are disabled in UI; Shop card is gated by NEXT_PUBLIC_AMAZON_LIST_URL. */
+const AFFILIATE_TAG = "packwise-20";
 
 export const PACKING_CATEGORIES = [
   "Documents",

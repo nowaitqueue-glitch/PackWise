@@ -19,17 +19,20 @@ import { TripPackingListSection } from "@/components/trip-packing-list-section";
 import { TripWeatherSection } from "@/components/trip-weather-section";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   CalendarRange,
   Compass,
   Pencil,
   Plus,
+  ScanLine,
   Users,
 } from "lucide-react";
 import {
   cn,
   glassCard,
+  glassCardHover,
   glassChip,
   tripTitleClass,
 } from "@/lib/utils";
@@ -301,19 +304,26 @@ export default async function TripPage({ params, searchParams }: TripPageProps) 
         />
         */}
 
-        <div className="rounded-2xl border-2 border-dashed border-blue-300/50 bg-gradient-to-br from-blue-50/50 to-teal-50/50 dark:from-blue-950/20 dark:to-teal-950/20 p-6 text-center">
-          <div className="text-3xl mb-3">📸</div>
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">
-            Suitcase Snap — Coming Soon
+        <div
+          className={cn(
+            "p-6 text-center",
+            glassCard,
+            glassCardHover
+          )}
+        >
+          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-from/20 to-brand-to/20 text-brand-from">
+            <ScanLine className="size-6" aria-hidden />
+          </div>
+          <h3 className="mb-2 text-lg font-semibold text-foreground">
+            Suitcase Snap
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-            AI-powered suitcase scanning will be available with PackWise Pro.
-            Snap a photo of your packed bag and we&apos;ll tell you what
-            you&apos;re forgetting.
+          <p className="mx-auto max-w-md text-sm text-muted-foreground">
+            Coming soon — AI-powered suitcase scanning. Snap a photo and
+            we&apos;ll tell you what you&apos;re forgetting.
           </p>
-          <span className="inline-block mt-4 px-3 py-1 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full">
-            Pro Feature
-          </span>
+          <div className="mt-4 flex justify-center">
+            <Badge variant="pro">Pro Feature — Coming Soon</Badge>
+          </div>
         </div>
       </main>
     </TripSceneBackgroundRoot>

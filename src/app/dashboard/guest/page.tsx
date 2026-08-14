@@ -138,11 +138,11 @@ export default function GuestDashboardPage() {
           travelers: guestTrip.travelers,
         });
         const withPacked = applyPackedState(items);
-        writeGuestPackingItems(withPacked);
+        const stored = writeGuestPackingItems(withPacked);
         const custom = applyPackedState(readGuestCustomItems());
-        const merged = [...withPacked, ...custom];
+        const merged = [...stored, ...custom];
         const count = syncGuestCheckoffCount(merged);
-        setPackingItems(withPacked);
+        setPackingItems(stored);
         setCheckoffCount(count);
         setPackedCount(count);
         setTotalCount(merged.length);

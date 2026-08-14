@@ -8,6 +8,8 @@ export const GUEST_CUSTOM_ITEMS_KEY = "guest_custom_items";
 export const GUEST_CHECKOFF_COUNT_KEY = "guest_checkoff_count";
 export const GUEST_CTA_DISMISSED_KEY = "guest_cta_dismissed";
 export const GUEST_LOCKED_DISMISSED_KEY = "guest_locked_dismissed";
+/** Stable claim fingerprint for idempotent account transfer (localStorage). */
+export const GUEST_CLAIM_ID_KEY = "guest_claim_id";
 /** sessionStorage snapshot used during claim so a rebuild failure can restore. */
 export const CLAIM_PACKING_SNAPSHOT_KEY = "packwise-claim-packing-snapshot";
 
@@ -119,8 +121,39 @@ export function writeGuestTrip(trip: GuestTrip): void {
   if (!canUseStorage()) return;
   try {
     localStorage.setItem(GUEST_TRIP_KEY, JSON.stringify(trip));
+    // Fresh trip → fresh claim fingerprint so retries map to one account trip.
+    ensureGuestClaimId(true);
   } catch {
     // Quota / private mode — ignore; guest demo stays in-memory for the page.
+  }
+}
+
+/** Idempotency key for claimGuestTrip; regenerated when a new guest trip is written. */
+export function readGuestClaimId(): string | null {
+  if (!canUseStorage()) return null;
+  try {
+    const existing = localStorage.getItem(GUEST_CLAIM_ID_KEY)?.trim();
+    return existing || null;
+  } catch {
+    return null;
+  }
+}
+
+export function ensureGuestClaimId(forceNew = false): string | null {
+  if (!canUseStorage()) return null;
+  try {
+    if (!forceNew) {
+      const existing = localStorage.getItem(GUEST_CLAIM_ID_KEY)?.trim();
+      if (existing) return existing;
+    }
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `claim-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(GUEST_CLAIM_ID_KEY, id);
+    return id;
+  } catch {
+    return null;
   }
 }
 
@@ -132,6 +165,7 @@ export function clearGuestTrip(): void {
     localStorage.removeItem(GUEST_PACKING_ITEMS_KEY);
     localStorage.removeItem(GUEST_CUSTOM_ITEMS_KEY);
     localStorage.removeItem(GUEST_CHECKOFF_COUNT_KEY);
+    localStorage.removeItem(GUEST_CLAIM_ID_KEY);
     localStorage.removeItem(LEGACY_GUEST_STORAGE_KEY);
   } catch {
     // Ignore storage failures.
@@ -157,29 +191,41 @@ function isPackingItemArray(value: unknown): value is PackingItem[] {
   );
 }
 
+function ensurePackingItemIds(items: PackingItem[]): PackingItem[] {
+  return items.map((item) => ({
+    ...item,
+    id:
+      typeof item.id === "string" && item.id.trim()
+        ? item.id.trim()
+        : crypto.randomUUID(),
+  }));
+}
+
 export function readGuestPackingItems(): PackingItem[] {
   if (!canUseStorage()) return [];
   try {
     const raw = localStorage.getItem(GUEST_PACKING_ITEMS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return isPackingItemArray(parsed) ? parsed : [];
+    return isPackingItemArray(parsed) ? ensurePackingItemIds(parsed) : [];
   } catch {
     return [];
   }
 }
 
-export function writeGuestPackingItems(items: PackingItem[]): void {
-  if (!canUseStorage()) return;
+export function writeGuestPackingItems(items: PackingItem[]): PackingItem[] {
+  const normalized = ensurePackingItemIds(items);
+  if (!canUseStorage()) return normalized;
   try {
-    if (items.length === 0) {
+    if (normalized.length === 0) {
       localStorage.removeItem(GUEST_PACKING_ITEMS_KEY);
-      return;
+      return [];
     }
-    localStorage.setItem(GUEST_PACKING_ITEMS_KEY, JSON.stringify(items));
+    localStorage.setItem(GUEST_PACKING_ITEMS_KEY, JSON.stringify(normalized));
   } catch {
     // Quota / private mode — ignore.
   }
+  return normalized;
 }
 
 function normalizeGuestCustomItems(items: PackingItem[]): PackingItem[] {

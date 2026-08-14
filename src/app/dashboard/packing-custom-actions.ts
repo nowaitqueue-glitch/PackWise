@@ -234,10 +234,90 @@ export async function deleteCustomPackingItem(params: {
     return { ok: false, error: error.message };
   }
 
+  // Idempotent: already deleted (optimistic / undo races).
   if (!data) {
-    return { ok: false, error: "Custom packing item not found." };
+    revalidatePath(`/dashboard/trips/${params.tripId}`);
+    return { ok: true };
   }
 
   revalidatePath(`/dashboard/trips/${params.tripId}`);
   return { ok: true };
+}
+
+/**
+ * Re-creates a custom packing item after undo (same id when provided).
+ * Owner-only.
+ */
+export async function restoreCustomPackingItem(params: {
+  tripId: string;
+  item: {
+    id?: string;
+    name: string;
+    category: string;
+    notes?: string;
+    packed?: boolean;
+  };
+}): Promise<ActionResult<PackingItem>> {
+  const auth = await requireTripOwner(params.tripId);
+  if (!auth.ok) return auth;
+
+  const name = normalizeName(params.item.name);
+  if (!name) {
+    return { ok: false, error: "Item name is required." };
+  }
+
+  const category = normalizeCategory(params.item.category);
+  if (!category) {
+    return { ok: false, error: "Choose a valid category." };
+  }
+
+  const notes = (params.item.notes ?? "").trim();
+  const packed = params.item.packed === true;
+  const supabase = await createClient();
+
+  // Idempotent: already restored.
+  if (params.item.id) {
+    const { data: existing } = await supabase
+      .from("packing_custom_items")
+      .select(
+        "id, trip_id, user_id, name, category, notes, packed, created_at, updated_at"
+      )
+      .eq("id", params.item.id)
+      .eq("trip_id", params.tripId)
+      .maybeSingle();
+
+    if (existing) {
+      return { ok: true, item: customItemToPackingItem(mapRow(existing)) };
+    }
+  }
+
+  const row: Record<string, unknown> = {
+    trip_id: params.tripId,
+    user_id: auth.userId,
+    name,
+    category,
+    notes,
+    packed,
+  };
+  if (params.item.id) {
+    row.id = params.item.id;
+  }
+
+  const { data, error } = await supabase
+    .from("packing_custom_items")
+    .insert(row)
+    .select(
+      "id, trip_id, user_id, name, category, notes, packed, created_at, updated_at"
+    )
+    .single();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      error: error?.message ?? "Failed to restore custom item.",
+    };
+  }
+
+  revalidatePath(`/dashboard/trips/${params.tripId}`);
+  return { ok: true, item: customItemToPackingItem(mapRow(data)) };
 }

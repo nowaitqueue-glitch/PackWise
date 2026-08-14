@@ -2,10 +2,17 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
-import { regeneratePackingList, updatePackingItemPacked } from "@/app/dashboard/packing-actions";
+import {
+  deletePackingItem,
+  deletePackingItems,
+  regeneratePackingList,
+  restorePackingItem,
+  updatePackingItemPacked,
+} from "@/app/dashboard/packing-actions";
 import {
   createCustomPackingItem,
   deleteCustomPackingItem,
+  restoreCustomPackingItem,
   updateCustomPackingItem,
   updateCustomPackingItemPacked,
 } from "@/app/dashboard/packing-custom-actions";
@@ -18,6 +25,8 @@ import { usePillBanner } from "@/components/pill-banner-provider";
 import { type PackingItem } from "@/lib/packing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
+const UNDO_BANNER_MS = 5000;
 
 type TripPackingListProps = {
   tripId: string;
@@ -38,6 +47,15 @@ function mergeDisplayItems(
     ...generated.map((item) => ({ ...item, isCustom: false as const })),
     ...custom.map((item) => ({ ...item, isCustom: true as const })),
   ];
+}
+
+function insertAtIndex(
+  items: PackingItem[],
+  item: PackingItem,
+  index: number
+): PackingItem[] {
+  const at = Math.max(0, Math.min(index, items.length));
+  return [...items.slice(0, at), item, ...items.slice(at)];
 }
 
 export function TripPackingList({
@@ -190,28 +208,228 @@ export function TripPackingList({
     });
   }
 
-  function handleDelete(item: PackingItem) {
-    if (!canEdit || !item.isCustom || !item.id) {
+  function handleUndoRemove(
+    item: PackingItem,
+    displayIndex: number,
+    generatedIndex: number
+  ) {
+    setLocalItems((current) => {
+      const alreadyThere = item.id
+        ? current.some((entry) => entry.id === item.id)
+        : false;
+      if (alreadyThere) return current;
+      return insertAtIndex(current, { ...item }, displayIndex);
+    });
+
+    startMutate(async () => {
+      if (item.isCustom) {
+        const result = await restoreCustomPackingItem({
+          tripId,
+          item: {
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            notes: item.notes,
+            packed: item.packed,
+          },
+        });
+        if (!result.ok) {
+          setLocalItems((current) =>
+            current.filter((entry) =>
+              item.id ? entry.id !== item.id : true
+            )
+          );
+          showBanner({ message: result.error, variant: "error" });
+          return;
+        }
+        setLocalItems((current) =>
+          current.map((entry) =>
+            entry.id === result.item.id && entry.isCustom ? result.item : entry
+          )
+        );
+        return;
+      }
+
+      const result = await restorePackingItem({
+        tripId,
+        item: { ...item, isCustom: false },
+        index: generatedIndex,
+      });
+      if (!result.ok) {
+        setLocalItems((current) =>
+          current.filter((entry) => (item.id ? entry.id !== item.id : true))
+        );
+        showBanner({ message: result.error, variant: "error" });
+        return;
+      }
+      setLocalItems((current) =>
+        current.map((entry) =>
+          entry.id === result.item.id && !entry.isCustom
+            ? { ...result.item, isCustom: false }
+            : entry
+        )
+      );
+    });
+  }
+
+  function handleRemove(item: PackingItem, itemIndex: number) {
+    if (!canEdit) {
+      return;
+    }
+
+    if (item.isCustom && !item.id) {
       return;
     }
 
     const previous = localItems;
+    const removeIndex =
+      item.id != null
+        ? localItems.findIndex((entry) => entry.id === item.id)
+        : itemIndex;
+    const resolvedIndex = removeIndex >= 0 ? removeIndex : itemIndex;
+    const generatedIndex = previous
+      .slice(0, resolvedIndex)
+      .filter((entry) => !entry.isCustom).length;
+    const removeState = { undone: false };
+
     setLocalItems((current) =>
-      current.filter((entry) => !(entry.isCustom && entry.id === item.id))
+      current.filter((entry, index) => {
+        if (item.id) {
+          return entry.id !== item.id;
+        }
+        return index !== resolvedIndex;
+      })
     );
-    if (editingId === item.id) {
+    if (item.isCustom && editingId === item.id) {
       setEditingId(null);
     }
 
+    showBanner({
+      message: "Item removed",
+      variant: "info",
+      duration: UNDO_BANNER_MS,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          removeState.undone = true;
+          handleUndoRemove(item, resolvedIndex, generatedIndex);
+        },
+      },
+    });
+
     startMutate(async () => {
-      const result = await deleteCustomPackingItem({
-        tripId,
-        itemId: item.id!,
-      });
+      const result = item.isCustom
+        ? await deleteCustomPackingItem({
+            tripId,
+            itemId: item.id!,
+          })
+        : await deletePackingItem({
+            tripId,
+            ...(item.id
+              ? { itemId: item.id }
+              : { itemIndex: generatedIndex }),
+          });
+
+      if (removeState.undone) {
+        // Undo won the race — ensure the item still exists server-side.
+        if (result.ok) {
+          if (item.isCustom) {
+            await restoreCustomPackingItem({
+              tripId,
+              item: {
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                notes: item.notes,
+                packed: item.packed,
+              },
+            });
+          } else {
+            await restorePackingItem({
+              tripId,
+              item: { ...item, isCustom: false },
+              index: generatedIndex,
+            });
+          }
+        }
+        return;
+      }
+
       if (!result.ok) {
         setLocalItems(previous);
         showBanner({ message: result.error, variant: "error" });
       }
+    });
+  }
+
+  async function handleRemoveItems(itemsToRemove: PackingItem[]) {
+    if (!canEdit || itemsToRemove.length === 0) {
+      return;
+    }
+
+    const ids = itemsToRemove
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
+    if (ids.length === 0) {
+      return;
+    }
+
+    const idSet = new Set(ids);
+    const previous = localItems;
+    const snapshot = itemsToRemove.map((item) => ({ ...item }));
+    const undoState = { undone: false };
+
+    setLocalItems((current) =>
+      current.filter((entry) => !(entry.id && idSet.has(entry.id)))
+    );
+    if (editingId && idSet.has(editingId)) {
+      setEditingId(null);
+    }
+
+    const result = await deletePackingItems({ tripId, itemIds: ids });
+    if (!result.ok) {
+      setLocalItems(previous);
+      showBanner({ message: result.error, variant: "error" });
+      throw new Error(result.error);
+    }
+
+    const count = result.deletedIds.length || ids.length;
+    showBanner({
+      message: count === 1 ? "Item removed" : `${count} items removed`,
+      variant: "info",
+      duration: UNDO_BANNER_MS,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          undoState.undone = true;
+          setLocalItems(previous);
+          void (async () => {
+            for (const item of snapshot) {
+              if (item.isCustom) {
+                await restoreCustomPackingItem({
+                  tripId,
+                  item: {
+                    id: item.id,
+                    name: item.name,
+                    category: item.category,
+                    notes: item.notes,
+                    packed: item.packed,
+                  },
+                });
+              } else {
+                const generatedIndex = previous
+                  .filter((entry) => !entry.isCustom)
+                  .findIndex((entry) => entry.id === item.id);
+                await restorePackingItem({
+                  tripId,
+                  item: { ...item, isCustom: false },
+                  index: generatedIndex >= 0 ? generatedIndex : undefined,
+                });
+              }
+            }
+          })();
+        },
+      },
     });
   }
 
@@ -273,13 +491,14 @@ export function TripPackingList({
       emptyMessage={emptyMessage}
       onTogglePacked={handleToggle}
       canManageCustom={canEdit}
+      onRemoveItem={canEdit ? handleRemove : undefined}
+      onRemoveItems={canEdit ? handleRemoveItems : undefined}
       editingId={editingId}
       editForm={editForm}
       onEditFormChange={setEditForm}
       onEditSubmit={handleEditSubmit}
       onEditCancel={() => setEditingId(null)}
       onStartEdit={startEdit}
-      onDeleteCustom={handleDelete}
       showAddForm={showAddForm}
       addForm={addForm}
       onAddFormChange={setAddForm}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getGuestWeatherForecast } from "@/app/dashboard/weather-actions";
 import { TripWeatherForecast } from "@/components/trip-weather-forecast";
 import { TripWeatherForecastSkeleton } from "@/components/trip-weather-forecast-skeleton";
 import type { WeatherForecastResult } from "@/lib/weather";
@@ -28,21 +29,20 @@ export function GuestWeatherSection({
 
     void (async () => {
       try {
-        const params = new URLSearchParams({
+        const result = await getGuestWeatherForecast({
           destination,
           startDate,
           endDate,
         });
-        const res = await fetch(`/api/weather?${params.toString()}`);
-        const body = (await res.json()) as WeatherForecastResult & {
-          error?: string;
-        };
-        if (!res.ok) {
-          throw new Error(body.error ?? "Weather data temporarily unavailable");
+        if (cancelled) return;
+        if (!result.ok) {
+          setWeather({
+            ok: false,
+            error: result.error || "Weather data temporarily unavailable",
+          });
+          return;
         }
-        if (!cancelled) {
-          setWeather({ ok: true, data: body });
-        }
+        setWeather({ ok: true, data: result.data });
       } catch (error) {
         if (!cancelled) {
           setWeather({

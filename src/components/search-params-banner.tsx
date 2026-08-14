@@ -31,28 +31,24 @@ const RULES: BannerRule[] = [
     variant: "success",
   },
   {
-    param: "upgrade",
-    value: "success",
-    message: "Welcome to PackWise Pro!",
-    variant: "success",
-  },
-  {
-    param: "upgrade",
-    value: "canceled",
-    message: "Upgrade canceled.",
-    variant: "info",
-  },
-  {
     param: "password_reset",
     value: "1",
     message: "Password updated successfully.",
     variant: "success",
+  },
+  {
+    param: "claim_warning",
+    value: "1",
+    message:
+      "Trip saved, but some custom packing items could not be transferred. You can add them again from this page.",
+    variant: "info",
   },
 ];
 
 /**
  * Reads one-shot query params (e.g. after redirects) and shows a pill banner,
  * then strips the param from the URL without a full navigation.
+ * Upgrade/Pro checkout banners are intentionally omitted (Pro Coming Soon).
  */
 export function SearchParamsBanner() {
   const searchParams = useSearchParams();
@@ -62,14 +58,11 @@ export function SearchParamsBanner() {
   const handledKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const upgrade = searchParams.get("upgrade");
-    const message = searchParams.get("message");
-
-    if (upgrade === "error" && message) {
-      const key = `upgrade:error:${message}`;
+    // Strip legacy upgrade query noise without showing Pro upgrade banners.
+    if (searchParams.get("upgrade")) {
+      const key = `upgrade:strip:${pathname}`;
       if (handledKeyRef.current === key) return;
       handledKeyRef.current = key;
-      showBanner({ message, variant: "error" });
       router.replace(pathname, { scroll: false });
       return;
     }

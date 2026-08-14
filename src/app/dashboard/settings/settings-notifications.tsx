@@ -1,126 +1,36 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { usePillBanner } from "@/components/pill-banner-provider";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { updateNotificationPrefs } from "./settings-actions";
-
 type SettingsNotificationsProps = {
   showPackingReminder: boolean;
   packingReminderEmail: boolean;
   pushNotifications: boolean;
 };
 
-export function SettingsNotifications({
-  // TODO: Re-enable when Resend is configured
-  // showPackingReminder: _showPackingReminder,
-  // packingReminderEmail: _initialPackingReminder,
-  pushNotifications: initialPush,
-}: SettingsNotificationsProps) {
-  const { showBanner } = usePillBanner();
-  // TODO: Re-enable when Resend is configured
-  // const [packingReminder, setPackingReminder] = useState(_initialPackingReminder);
-  const [pushEnabled, setPushEnabled] = useState(initialPush);
-  const [isPending, startTransition] = useTransition();
-
-  // TODO: Re-enable when Resend is configured
-  // function savePrefs(next: {
-  //   packingReminderEmail?: boolean;
-  //   pushNotifications?: boolean;
-  // }) {
-  //   startTransition(async () => {
-  //     const result = await updateNotificationPrefs(next);
-  //     if (!result.ok) {
-  //       showBanner({ message: result.error, variant: "error" });
-  //       if (typeof next.packingReminderEmail === "boolean") {
-  //         setPackingReminder(!next.packingReminderEmail);
-  //       }
-  //       if (typeof next.pushNotifications === "boolean") {
-  //         setPushEnabled(!next.pushNotifications);
-  //       }
-  //       return;
-  //     }
-  //     showBanner({ message: "Preferences saved.", variant: "success" });
-  //   });
-  // }
-
+/**
+ * Notification prefs UI. Packing reminders and push are Coming Soon —
+ * no working toggles until Resend / push delivery ship.
+ */
+export function SettingsNotifications(_props: SettingsNotificationsProps) {
   return (
     <div className="divide-y divide-slate-900/5 dark:divide-white/10">
-      {/* TODO: Re-enable when Resend is configured
-          Requires RESEND_API_KEY in Vercel env vars and verified sending domain
-      {_showPackingReminder ? (
-        <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
-          <div className="min-w-0 space-y-1">
-            <Label htmlFor="packing-reminder">Packing reminder email</Label>
-            <p className="text-sm text-muted-foreground">
-              Get an email before upcoming trips so you can finish packing.
-            </p>
-          </div>
-          <Switch
-            id="packing-reminder"
-            className="mt-0.5 shrink-0"
-            checked={packingReminder}
-            disabled={isPending}
-            onCheckedChange={(checked) => {
-              setPackingReminder(checked);
-              savePrefs({ packingReminderEmail: checked });
-            }}
-          />
-        </div>
-      ) : null}
-      */}
-      <div className="py-4 first:pt-0 last:pb-0">
-        <div className="text-sm italic text-muted-foreground">
-          Email reminders — Coming Soon
-        </div>
+      <div className="space-y-1 py-4 first:pt-0 last:pb-0">
+        <p className="text-sm font-medium text-foreground">
+          Packing reminder email
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Get an email before upcoming trips so you can finish packing.
+        </p>
+        <p className="text-sm italic text-muted-foreground">Coming Soon</p>
       </div>
 
-      <div className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
-        <div className="min-w-0 space-y-1">
-          <Label htmlFor="push-notifications">Push notifications</Label>
-          <p className="text-sm text-muted-foreground">
-            Allow browser notifications when PackWise has trip updates. Your
-            browser may still ask for permission.
-          </p>
-        </div>
-        <Switch
-          id="push-notifications"
-          className="mt-0.5 shrink-0"
-          checked={pushEnabled}
-          disabled={isPending}
-          onCheckedChange={(checked) => {
-            startTransition(async () => {
-              if (checked && typeof window !== "undefined" && "Notification" in window) {
-                try {
-                  const permission = await Notification.requestPermission();
-                  if (permission === "denied") {
-                    setPushEnabled(false);
-                    showBanner({
-                      message:
-                        "Notification permission was denied in your browser.",
-                      variant: "error",
-                    });
-                    return;
-                  }
-                } catch {
-                  // Permission API unavailable — still store preference.
-                }
-              }
-
-              setPushEnabled(checked);
-              const result = await updateNotificationPrefs({
-                pushNotifications: checked,
-              });
-              if (!result.ok) {
-                setPushEnabled(!checked);
-                showBanner({ message: result.error, variant: "error" });
-                return;
-              }
-              showBanner({ message: "Preferences saved.", variant: "success" });
-            });
-          }}
-        />
+      <div className="space-y-1 py-4 first:pt-0 last:pb-0">
+        <p className="text-sm font-medium text-foreground">
+          Push notifications
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Allow browser notifications when PackWise has trip updates.
+        </p>
+        <p className="text-sm italic text-muted-foreground">Coming Soon</p>
       </div>
     </div>
   );

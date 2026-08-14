@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Check,
   Loader2,
   Pencil,
   Plus,
@@ -16,6 +17,15 @@ import {
   type PackingItem,
 } from "@/lib/packing";
 import { PACKING_CATEGORIES } from "@/lib/packing-items-database";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -30,7 +40,7 @@ import {
 } from "@/components/ui/select";
 import {
   cn,
-  deleteButtonIconClass,
+  glassCard,
   glassCardHover,
   glassChip,
   sectionTitleClass,
@@ -77,7 +87,30 @@ function bindInstallPromptListener(): void {
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return true;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    if (
+      document.documentElement.getAttribute("data-reduced-motion") === "true"
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    if (localStorage.getItem("packwise-reduced-motion") === "1") {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
 }
 
 function isStandalonePwa(): boolean {
@@ -170,6 +203,10 @@ function PackingPanel({
   );
 }
 
+function packingItemKey(item: PackingItem, itemIndex: number): string {
+  return item.id ?? `${item.category}-${item.name}-${itemIndex}`;
+}
+
 export type PackingListViewProps = {
   items: PackingItem[];
   /** Stable key for per-session 100% celebration (trip id or "guest"). */
@@ -184,15 +221,18 @@ export type PackingListViewProps = {
   headerActions?: React.ReactNode;
   emptyMessage?: React.ReactNode;
   onTogglePacked: (item: PackingItem, index: number, packed: boolean) => void;
-  /** Owner edit/delete/add for custom items. */
+  /** Owner edit/add for custom items; also enables remove on every row. */
   canManageCustom?: boolean;
+  /** Remove any item (template or custom). Called after fade-out. */
+  onRemoveItem?: (item: PackingItem, index: number) => void;
+  /** Batch remove selected items. Called after staggered fade-out. */
+  onRemoveItems?: (items: PackingItem[]) => void | Promise<void>;
   editingId?: string | null;
   editForm?: CustomFormState;
   onEditFormChange?: (form: CustomFormState) => void;
   onEditSubmit?: (event: React.FormEvent) => void;
   onEditCancel?: () => void;
   onStartEdit?: (item: PackingItem) => void;
-  onDeleteCustom?: (item: PackingItem) => void;
   showAddForm?: boolean;
   addForm?: CustomFormState;
   onAddFormChange?: (form: CustomFormState) => void;
@@ -201,6 +241,9 @@ export type PackingListViewProps = {
   onShowAddForm?: () => void;
   testId?: string;
 };
+
+const REMOVE_FADE_MS = 250;
+const BATCH_STAGGER_MS = 50;
 
 export function PackingListView({
   items,
@@ -214,13 +257,14 @@ export function PackingListView({
   emptyMessage,
   onTogglePacked,
   canManageCustom = false,
+  onRemoveItem,
+  onRemoveItems,
   editingId = null,
   editForm,
   onEditFormChange,
   onEditSubmit,
   onEditCancel,
   onStartEdit,
-  onDeleteCustom,
   showAddForm = false,
   addForm,
   onAddFormChange,
@@ -232,9 +276,18 @@ export function PackingListView({
   const { showBanner } = usePillBanner();
   const [celebrateGradient, setCelebrateGradient] = useState(false);
   const [showInstallHint, setShowInstallHint] = useState(false);
+  const [exitingKeys, setExitingKeys] = useState<Set<string>>(() => new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [confirmBatchOpen, setConfirmBatchOpen] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const celebratedRef = useRef(false);
   const gradientTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const installTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const removeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
+  const batchTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const groups = groupPackingItemsByCategory(items);
   const hasItems = groups.length > 0;
@@ -244,6 +297,12 @@ export function PackingListView({
   items.forEach((item, index) => {
     indexByRef.set(item, index);
   });
+
+  const canRemove = Boolean(canManageCustom && onRemoveItem && !readOnly);
+  const canBatchRemove = Boolean(
+    canManageCustom && onRemoveItems && !readOnly
+  );
+  const showSelectToggle = canBatchRemove && hasItems;
 
   useEffect(() => {
     bindInstallPromptListener();
@@ -311,8 +370,32 @@ export function PackingListView({
       if (installTimerRef.current) {
         clearTimeout(installTimerRef.current);
       }
+      for (const timer of Array.from(removeTimersRef.current.values())) {
+        clearTimeout(timer);
+      }
+      removeTimersRef.current.clear();
+      for (const timer of batchTimersRef.current) {
+        clearTimeout(timer);
+      }
+      batchTimersRef.current = [];
     };
   }, []);
+
+  // Drop selection keys that no longer exist (e.g. after single-item remove).
+  useEffect(() => {
+    const validKeys = new Set(
+      items.map((item, index) => packingItemKey(item, index))
+    );
+    setSelectedItems((current) => {
+      const next = current.filter((key) => validKeys.has(key));
+      return next.length === current.length ? current : next;
+    });
+    if (!hasItems && isSelectionMode) {
+      setIsSelectionMode(false);
+      setSelectedItems([]);
+      setConfirmBatchOpen(false);
+    }
+  }, [items, hasItems, isSelectionMode]);
 
   async function handleInstallHintClick() {
     setShowInstallHint(false);
@@ -333,7 +416,145 @@ export function PackingListView({
     markInstallPromptSeen();
   }
 
+  function exitSelectionMode() {
+    setIsSelectionMode(false);
+    setSelectedItems([]);
+    setConfirmBatchOpen(false);
+  }
+
+  function enterSelectionMode() {
+    setEditingIdSafe();
+    setIsSelectionMode(true);
+    setSelectedItems([]);
+  }
+
+  function setEditingIdSafe() {
+    onEditCancel?.();
+    onAddCancel?.();
+  }
+
+  function toggleSelected(key: string) {
+    setSelectedItems((current) =>
+      current.includes(key)
+        ? current.filter((entry) => entry !== key)
+        : [...current, key]
+    );
+  }
+
+  function handleRemoveClick(item: PackingItem, itemIndex: number, key: string) {
+    if (!onRemoveItem || readOnly || disabled || busy || isSelectionMode) {
+      return;
+    }
+    if (exitingKeys.has(key) || removeTimersRef.current.has(key)) return;
+
+    const fadeMs = prefersReducedMotion() ? 0 : REMOVE_FADE_MS;
+    setExitingKeys((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+
+    const timer = setTimeout(() => {
+      removeTimersRef.current.delete(key);
+      setExitingKeys((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+      onRemoveItem(item, itemIndex);
+    }, fadeMs);
+    removeTimersRef.current.set(key, timer);
+  }
+
+  async function confirmBatchDelete() {
+    if (!onRemoveItems || isBatchDeleting || selectedItems.length === 0) {
+      return;
+    }
+
+    const selectedKeySet = new Set(selectedItems);
+    const toRemove: PackingItem[] = [];
+    const removeKeys: string[] = [];
+
+    items.forEach((item, index) => {
+      const key = packingItemKey(item, index);
+      if (selectedKeySet.has(key)) {
+        // Batch delete requires stable ids for the server / storage helpers.
+        if (!item.id) return;
+        toRemove.push(item);
+        removeKeys.push(key);
+      }
+    });
+
+    if (toRemove.length === 0) {
+      setConfirmBatchOpen(false);
+      return;
+    }
+
+    setIsBatchDeleting(true);
+    setConfirmBatchOpen(false);
+
+    const reduced = prefersReducedMotion();
+    const stagger = reduced ? 0 : BATCH_STAGGER_MS;
+    const fadeMs = reduced ? 0 : REMOVE_FADE_MS;
+
+    for (const timer of batchTimersRef.current) {
+      clearTimeout(timer);
+    }
+    batchTimersRef.current = [];
+
+    await new Promise<void>((resolve) => {
+      removeKeys.forEach((key, i) => {
+        const startTimer = setTimeout(() => {
+          setExitingKeys((current) => {
+            const next = new Set(current);
+            next.add(key);
+            return next;
+          });
+        }, i * stagger);
+        batchTimersRef.current.push(startTimer);
+      });
+
+      const doneAt =
+        (removeKeys.length > 0 ? (removeKeys.length - 1) * stagger : 0) +
+        fadeMs;
+      const doneTimer = setTimeout(() => resolve(), doneAt);
+      batchTimersRef.current.push(doneTimer);
+    });
+
+    try {
+      await onRemoveItems(toRemove);
+      setExitingKeys((current) => {
+        const next = new Set(current);
+        for (const key of removeKeys) next.delete(key);
+        return next;
+      });
+      exitSelectionMode();
+    } catch {
+      setExitingKeys((current) => {
+        const next = new Set(current);
+        for (const key of removeKeys) next.delete(key);
+        return next;
+      });
+      showBanner({
+        message: "Could not remove items. Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setIsBatchDeleting(false);
+      batchTimersRef.current = [];
+    }
+  }
+
   const checkboxesDisabled = readOnly || disabled;
+  const selectedCount = selectedItems.length;
+  const batchDeleteLabel =
+    selectedCount === 1
+      ? "Delete 1 item"
+      : `Delete ${selectedCount} items`;
+  const batchConfirmTitle =
+    selectedCount === 1
+      ? "Remove 1 item from this list?"
+      : `Remove ${selectedCount} items from this list?`;
 
   return (
     <div className="flex w-full flex-col gap-4" data-testid={testId}>
@@ -359,12 +580,35 @@ export function PackingListView({
               <span className="text-sm font-semibold text-foreground">
                 Packing progress
               </span>
-              <span
-                className="text-sm font-semibold tabular-nums text-foreground"
-                data-testid="packing-progress-text"
-              >
-                {progress.packed}/{progress.total} packed ({progress.percent}%)
-              </span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span
+                  className="text-sm font-semibold tabular-nums text-foreground"
+                  data-testid="packing-progress-text"
+                >
+                  {progress.packed}/{progress.total} packed ({progress.percent}
+                  %)
+                </span>
+                {showSelectToggle ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 py-0.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      if (isSelectionMode) {
+                        exitSelectionMode();
+                      } else {
+                        enterSelectionMode();
+                      }
+                    }}
+                    disabled={disabled || busy || isBatchDeleting}
+                    aria-pressed={isSelectionMode}
+                    data-testid="packing-select-toggle"
+                  >
+                    {isSelectionMode ? "Done" : "Select"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <Progress
               value={progress.percent}
@@ -436,9 +680,13 @@ export function PackingListView({
             <ul className="-mx-2 flex flex-col">
               {group.items.map((item, groupIndex) => {
                 const itemIndex = indexByRef.get(item) ?? groupIndex;
-                const key =
-                  item.id ?? `${group.category}-${item.name}-${itemIndex}`;
+                const key = packingItemKey(item, itemIndex);
+                const isExiting = exitingKeys.has(key);
+                const isSelected = selectedItems.includes(key);
+                const selectable =
+                  isSelectionMode && Boolean(item.id) && !isBatchDeleting;
                 const isEditing =
+                  !isSelectionMode &&
                   canManageCustom &&
                   item.isCustom &&
                   editingId === item.id &&
@@ -451,10 +699,15 @@ export function PackingListView({
                   <li
                     key={key}
                     className={cn(
-                      "rounded-xl transition-colors",
+                      "group rounded-xl transition-[opacity,colors,box-shadow] duration-300 ease-out",
+                      isExiting && "pointer-events-none opacity-0",
+                      isSelectionMode &&
+                        "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
+                      isSelected &&
+                        "bg-blue-500/10 ring-1 ring-inset ring-blue-500/25 dark:bg-blue-400/10 dark:ring-blue-400/30",
                       isEditing
                         ? "p-2"
-                        : "hover:bg-white/50 dark:hover:bg-white/5"
+                        : !isSelected && "hover:bg-white/50 dark:hover:bg-white/5"
                     )}
                     data-testid={
                       item.isCustom ? "packing-custom-item" : "packing-item"
@@ -470,12 +723,69 @@ export function PackingListView({
                         submitLabel="Save"
                         testIdPrefix="packing-custom-edit"
                       />
+                    ) : isSelectionMode ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex min-h-11 w-full items-center gap-3 px-2 py-1.5 text-left",
+                          !selectable && "cursor-default opacity-60"
+                        )}
+                        disabled={!selectable || isExiting}
+                        aria-pressed={isSelected}
+                        aria-label={
+                          isSelected
+                            ? `Deselect ${item.name}`
+                            : `Select ${item.name}`
+                        }
+                        data-testid="packing-item-select"
+                        onClick={() => {
+                          if (!selectable) return;
+                          toggleSelected(key);
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            "grid size-5 shrink-0 place-content-center rounded-full border-2 transition-all",
+                            "motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200",
+                            isSelected
+                              ? "border-transparent bg-blue-500 text-white dark:bg-blue-400"
+                              : "border-blue-500/45 bg-white/80 dark:border-blue-400/45 dark:bg-slate-900/70"
+                          )}
+                          aria-hidden
+                        >
+                          {isSelected ? (
+                            <Check className="size-3" strokeWidth={3} />
+                          ) : null}
+                        </span>
+                        <span className="min-w-0 flex-1 py-1">
+                          <span
+                            className={cn(
+                              "block text-sm font-medium transition-colors",
+                              item.packed
+                                ? "text-muted-foreground/70 line-through"
+                                : "text-foreground"
+                            )}
+                          >
+                            {item.name}
+                          </span>
+                          {item.notes ? (
+                            <span
+                              className={cn(
+                                "block text-xs text-muted-foreground",
+                                item.packed && "line-through opacity-70"
+                              )}
+                            >
+                              {item.notes}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
                     ) : (
                       <div className="flex min-h-11 items-center gap-3 px-2 py-1.5">
                         <Checkbox
                           id={`pack-${celebrationKey}-${key}`}
                           checked={item.packed}
-                          disabled={checkboxesDisabled}
+                          disabled={checkboxesDisabled || isExiting}
                           onCheckedChange={(checked) => {
                             onTogglePacked(item, itemIndex, checked === true);
                           }}
@@ -535,35 +845,35 @@ export function PackingListView({
                         ) : null} */}
 
                         {canManageCustom && item.isCustom ? (
-                          <div className="flex shrink-0 items-center gap-0.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="min-h-11 min-w-11 p-2 text-muted-foreground"
-                              onClick={() => onStartEdit?.(item)}
-                              disabled={busy}
-                              aria-label={`Edit ${item.name}`}
-                              data-testid="packing-custom-edit"
-                            >
-                              <Pencil className="size-4" aria-hidden />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructiveGhost"
-                              size="icon"
-                              className="group min-h-11 min-w-11 p-2"
-                              onClick={() => onDeleteCustom?.(item)}
-                              disabled={busy}
-                              aria-label={`Delete ${item.name}`}
-                              data-testid="packing-custom-delete"
-                            >
-                              <Trash2
-                                className={cn("size-4", deleteButtonIconClass)}
-                                aria-hidden
-                              />
-                            </Button>
-                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="min-h-11 min-w-11 shrink-0 p-2 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                            onClick={() => onStartEdit?.(item)}
+                            disabled={busy || isExiting}
+                            aria-label={`Edit ${item.name}`}
+                            data-testid="packing-custom-edit"
+                          >
+                            <Pencil className="size-4" aria-hidden />
+                          </Button>
+                        ) : null}
+
+                        {canRemove ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="min-h-11 min-w-11 shrink-0 p-2 text-gray-400 opacity-100 transition-colors hover:text-red-500 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                            onClick={() =>
+                              handleRemoveClick(item, itemIndex, key)
+                            }
+                            disabled={busy || isExiting}
+                            aria-label={`Remove ${item.name}`}
+                            data-testid="packing-item-remove"
+                          >
+                            <Trash2 className="size-4 sm:size-5" aria-hidden />
+                          </Button>
                         ) : null}
                       </div>
                     )}
@@ -575,7 +885,7 @@ export function PackingListView({
         );
       })}
 
-      {canManageCustom ? (
+      {canManageCustom && !isSelectionMode ? (
         <PackingPanel>
           {showAddForm && addForm && onAddFormChange && onAddSubmit && onAddCancel ? (
             <CustomItemForm
@@ -604,6 +914,87 @@ export function PackingListView({
       ) : null}
 
       <ShopEssentialsCard />
+
+      {canBatchRemove && selectedCount > 0 ? (
+        <>
+          <div
+            role="toolbar"
+            aria-label="Batch packing item actions"
+            className={cn(
+              "fixed inset-x-4 bottom-20 z-40 mx-auto flex max-w-lg items-center gap-2 p-3 sm:bottom-6 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full",
+              glassCard,
+              "shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+            )}
+            data-testid="packing-batch-bar"
+          >
+            <Button
+              type="button"
+              variant="destructive"
+              className="min-w-0 flex-1"
+              disabled={isBatchDeleting || busy}
+              onClick={() => setConfirmBatchOpen(true)}
+              data-testid="packing-batch-delete"
+            >
+              {isBatchDeleting ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Trash2 aria-hidden />
+              )}
+              <span className="truncate">
+                {isBatchDeleting ? "Deleting…" : batchDeleteLabel}
+              </span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isBatchDeleting}
+              onClick={() => setSelectedItems([])}
+              data-testid="packing-batch-deselect"
+            >
+              Deselect all
+            </Button>
+          </div>
+
+          <AlertDialog
+            open={confirmBatchOpen && selectedCount > 0}
+            onOpenChange={(next) => {
+              if (isBatchDeleting) return;
+              if (next && selectedCount === 0) return;
+              setConfirmBatchOpen(next);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>{batchConfirmTitle}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You can undo from the banner right after deleting.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isBatchDeleting}>
+                  Cancel
+                </AlertDialogCancel>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isBatchDeleting}
+                  onClick={() => void confirmBatchDelete()}
+                  data-testid="packing-batch-delete-confirm"
+                >
+                  {isBatchDeleting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      Deleting…
+                    </>
+                  ) : (
+                    batchDeleteLabel
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      ) : null}
     </div>
   );
 }

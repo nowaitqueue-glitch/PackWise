@@ -66,6 +66,18 @@ type UpdatePackingItemPackedResult =
   | { ok: true }
   | { ok: false; error: string };
 
+type DeletePackingItemResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+type DeletePackingItemsResult =
+  | { ok: true; deletedIds: string[] }
+  | { ok: false; error: string };
+
+type RestorePackingItemResult =
+  | { ok: true; item: PackingItem }
+  | { ok: false; error: string };
+
 /**
  * Prefer session-scoped trip weather; fall back to a direct forecast so
  * Bearer / API clients still get weather-aware lists when cookies
@@ -282,6 +294,399 @@ export async function updatePackingItemPacked(params: {
   return {
     ok: false,
     error: "Could not update packing item. Please try again.",
+  };
+}
+
+/**
+ * Removes a generated (template) item from packing_lists.items JSONB.
+ * Custom items must use deleteCustomPackingItem instead.
+ * Owner-only; optimistic concurrency on packing_lists.updated_at.
+ */
+export async function deletePackingItem(params: {
+  tripId: string;
+  itemId?: string;
+  /** Fallback for legacy rows without a stable id (index within generated items). */
+  itemIndex?: number;
+}): Promise<DeletePackingItemResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const { data: trip, error: tripError } = await supabase
+    .from("trips")
+    .select("id, user_id")
+    .eq("id", params.tripId)
+    .maybeSingle();
+
+  if (tripError || !trip) {
+    return { ok: false, error: "Trip not found." };
+  }
+
+  if (trip.user_id !== user.id) {
+    return {
+      ok: false,
+      error: "Only the trip owner can update the packing list.",
+    };
+  }
+
+  for (let attempt = 0; attempt < PACKED_UPDATE_MAX_ATTEMPTS; attempt++) {
+    const { data: packingList, error: listError } = await supabase
+      .from("packing_lists")
+      .select("items, updated_at")
+      .eq("trip_id", params.tripId)
+      .maybeSingle();
+
+    if (listError) {
+      return { ok: false, error: listError.message };
+    }
+
+    if (!packingList) {
+      return { ok: false, error: "Packing list not found." };
+    }
+
+    const items = parsePackingItems(packingList.items);
+    let index = -1;
+
+    if (params.itemId) {
+      index = items.findIndex((item) => item.id === params.itemId);
+      if (index < 0) {
+        // Already gone — treat as success (idempotent undo/remove races).
+        return { ok: true };
+      }
+    } else if (typeof params.itemIndex === "number") {
+      index = params.itemIndex;
+    }
+
+    if (index < 0 || index >= items.length) {
+      return { ok: false, error: "Packing item not found." };
+    }
+
+    const nextItems = items.filter((_, i) => i !== index);
+    const source = parsePackingListSource(packingList.items);
+    const payload = toPackingListPayload(
+      normalizePackingItemsForStorage(nextItems),
+      source
+    );
+
+    let updateQuery = supabase
+      .from("packing_lists")
+      .update({ items: payload })
+      .eq("trip_id", params.tripId);
+
+    if (typeof packingList.updated_at === "string" && packingList.updated_at) {
+      updateQuery = updateQuery.eq("updated_at", packingList.updated_at);
+    }
+
+    const { data: updated, error } = await updateQuery
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      reportError(new Error(error.message), {
+        context: "packing_delete_item",
+        tripId: params.tripId,
+        itemId: params.itemId,
+      });
+      return { ok: false, error: error.message };
+    }
+
+    if (updated) {
+      revalidatePath(`/dashboard/trips/${params.tripId}`);
+      return { ok: true };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "Could not remove packing item. Please try again.",
+  };
+}
+
+/**
+ * Batch-remove packing items by id. Template ids are filtered from
+ * packing_lists.items JSON; custom ids are deleted from packing_custom_items.
+ * Owner-only; mixed batches are supported in one call.
+ */
+export async function deletePackingItems(params: {
+  tripId: string;
+  itemIds: string[];
+}): Promise<DeletePackingItemsResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const { data: trip, error: tripError } = await supabase
+    .from("trips")
+    .select("id, user_id")
+    .eq("id", params.tripId)
+    .maybeSingle();
+
+  if (tripError || !trip) {
+    return { ok: false, error: "Trip not found." };
+  }
+
+  if (trip.user_id !== user.id) {
+    return {
+      ok: false,
+      error: "Only the trip owner can update the packing list.",
+    };
+  }
+
+  const itemIds = Array.from(
+    new Set(
+      params.itemIds
+        .map((id) => id?.trim())
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  if (itemIds.length === 0) {
+    return { ok: true, deletedIds: [] };
+  }
+
+  const idSet = new Set(itemIds);
+  const deletedIds = new Set<string>();
+
+  // Filter template items from packing_lists first (optimistic concurrency).
+  // If this fails, custom rows are left untouched so the client can safely
+  // restore its optimistic UI snapshot.
+  for (let attempt = 0; attempt < PACKED_UPDATE_MAX_ATTEMPTS; attempt++) {
+    const { data: packingList, error: listError } = await supabase
+      .from("packing_lists")
+      .select("items, updated_at")
+      .eq("trip_id", params.tripId)
+      .maybeSingle();
+
+    if (listError) {
+      reportError(new Error(listError.message), {
+        context: "packing_delete_items_list",
+        tripId: params.tripId,
+      });
+      return { ok: false, error: listError.message };
+    }
+
+    if (!packingList) {
+      break;
+    }
+
+    const items = parsePackingItems(packingList.items);
+    const removedTemplateIds: string[] = [];
+    const nextItems = items.filter((item) => {
+      if (item.id && idSet.has(item.id)) {
+        removedTemplateIds.push(item.id);
+        return false;
+      }
+      return true;
+    });
+
+    if (nextItems.length === items.length) {
+      break;
+    }
+
+    const source = parsePackingListSource(packingList.items);
+    const payload = toPackingListPayload(
+      normalizePackingItemsForStorage(nextItems),
+      source
+    );
+
+    let updateQuery = supabase
+      .from("packing_lists")
+      .update({ items: payload })
+      .eq("trip_id", params.tripId);
+
+    if (typeof packingList.updated_at === "string" && packingList.updated_at) {
+      updateQuery = updateQuery.eq("updated_at", packingList.updated_at);
+    }
+
+    const { data: updated, error } = await updateQuery
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      reportError(new Error(error.message), {
+        context: "packing_delete_items",
+        tripId: params.tripId,
+        itemCount: itemIds.length,
+      });
+      return { ok: false, error: error.message };
+    }
+
+    if (updated) {
+      for (const id of removedTemplateIds) deletedIds.add(id);
+      break;
+    }
+
+    if (attempt === PACKED_UPDATE_MAX_ATTEMPTS - 1) {
+      return {
+        ok: false,
+        error: "Could not remove packing items. Please try again.",
+      };
+    }
+  }
+
+  const remainingIds = itemIds.filter((id) => !deletedIds.has(id));
+  if (remainingIds.length === 0) {
+    revalidatePath(`/dashboard/trips/${params.tripId}`);
+    return { ok: true, deletedIds: Array.from(deletedIds) };
+  }
+
+  const { data: customDeleted, error: customError } = await supabase
+    .from("packing_custom_items")
+    .delete()
+    .eq("trip_id", params.tripId)
+    .in("id", remainingIds)
+    .select("id");
+
+  if (customError) {
+    reportError(new Error(customError.message), {
+      context: "packing_delete_items_custom",
+      tripId: params.tripId,
+      itemCount: remainingIds.length,
+    });
+    return { ok: false, error: customError.message };
+  }
+
+  for (const row of customDeleted ?? []) {
+    if (row?.id) deletedIds.add(String(row.id));
+  }
+
+  revalidatePath(`/dashboard/trips/${params.tripId}`);
+  return { ok: true, deletedIds: Array.from(deletedIds) };
+}
+
+/**
+ * Re-inserts a generated packing item (undo after deletePackingItem).
+ * Owner-only; optimistic concurrency on packing_lists.updated_at.
+ */
+export async function restorePackingItem(params: {
+  tripId: string;
+  item: PackingItem;
+  /** Preferred index among generated items; clamped to list bounds. */
+  index?: number;
+}): Promise<RestorePackingItemResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "You must be signed in." };
+  }
+
+  const { data: trip, error: tripError } = await supabase
+    .from("trips")
+    .select("id, user_id")
+    .eq("id", params.tripId)
+    .maybeSingle();
+
+  if (tripError || !trip) {
+    return { ok: false, error: "Trip not found." };
+  }
+
+  if (trip.user_id !== user.id) {
+    return {
+      ok: false,
+      error: "Only the trip owner can update the packing list.",
+    };
+  }
+
+  const incoming = params.item;
+  if (!incoming.name?.trim()) {
+    return { ok: false, error: "Item name is required." };
+  }
+
+  for (let attempt = 0; attempt < PACKED_UPDATE_MAX_ATTEMPTS; attempt++) {
+    const { data: packingList, error: listError } = await supabase
+      .from("packing_lists")
+      .select("items, updated_at")
+      .eq("trip_id", params.tripId)
+      .maybeSingle();
+
+    if (listError) {
+      return { ok: false, error: listError.message };
+    }
+
+    if (!packingList) {
+      return { ok: false, error: "Packing list not found." };
+    }
+
+    const items = parsePackingItems(packingList.items);
+
+    // Idempotent: already restored with the same id.
+    if (
+      incoming.id &&
+      items.some((item) => item.id === incoming.id)
+    ) {
+      const existing = items.find((item) => item.id === incoming.id)!;
+      return { ok: true, item: existing };
+    }
+
+    const restored: PackingItem = {
+      ...(incoming.id ? { id: incoming.id } : {}),
+      name: incoming.name.trim(),
+      category: incoming.category.trim() || "Other",
+      notes: incoming.notes?.trim() ?? "",
+      packed: incoming.packed === true,
+      ...(incoming.affiliateLink
+        ? { affiliateLink: incoming.affiliateLink }
+        : {}),
+    };
+
+    const insertAt =
+      typeof params.index === "number"
+        ? Math.max(0, Math.min(params.index, items.length))
+        : items.length;
+    const nextItems = [
+      ...items.slice(0, insertAt),
+      restored,
+      ...items.slice(insertAt),
+    ];
+    const source = parsePackingListSource(packingList.items);
+    const normalized = normalizePackingItemsForStorage(nextItems);
+    const payload = toPackingListPayload(normalized, source);
+    const restoredNormalized = normalized[insertAt];
+
+    let updateQuery = supabase
+      .from("packing_lists")
+      .update({ items: payload })
+      .eq("trip_id", params.tripId);
+
+    if (typeof packingList.updated_at === "string" && packingList.updated_at) {
+      updateQuery = updateQuery.eq("updated_at", packingList.updated_at);
+    }
+
+    const { data: updated, error } = await updateQuery
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      reportError(new Error(error.message), {
+        context: "packing_restore_item",
+        tripId: params.tripId,
+        itemId: incoming.id,
+      });
+      return { ok: false, error: error.message };
+    }
+
+    if (updated) {
+      revalidatePath(`/dashboard/trips/${params.tripId}`);
+      return { ok: true, item: restoredNormalized };
+    }
+  }
+
+  return {
+    ok: false,
+    error: "Could not restore packing item. Please try again.",
   };
 }
 

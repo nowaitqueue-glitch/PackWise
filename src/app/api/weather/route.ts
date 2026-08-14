@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getWeatherForecast, WeatherError } from "@/lib/weather";
 
 const RATE_LIMIT_MAX = 30;
+/** Unauthenticated callers get a tighter ceiling. */
+const GUEST_RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 type RateBucket = { count: number; resetAt: number };
@@ -13,7 +15,8 @@ type RateBucket = { count: number; resetAt: number };
 const rateBuckets = new Map<string, RateBucket>();
 
 function checkRateLimit(
-  key: string
+  key: string,
+  max = RATE_LIMIT_MAX
 ): { allowed: true } | { allowed: false; retryAfterSec: number } {
   const now = Date.now();
   let bucket = rateBuckets.get(key);
@@ -21,7 +24,7 @@ function checkRateLimit(
     bucket = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
     rateBuckets.set(key, bucket);
   }
-  if (bucket.count >= RATE_LIMIT_MAX) {
+  if (bucket.count >= max) {
     return {
       allowed: false,
       retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
@@ -33,26 +36,30 @@ function checkRateLimit(
 
 /**
  * Enforce IP always; when authenticated, also enforce per-user so one account
- * cannot burn quota across devices / rotating IPs.
+ * cannot burn quota across devices / rotating IPs. Guests use a tighter IP cap.
  */
 function enforceRateLimits(
   request: NextRequest,
   userId: string | null
 ): { allowed: true } | { allowed: false; retryAfterSec: number } {
-  const keys = [`ip:${getClientIp(request)}`];
-  if (userId) keys.push(`user:${userId}`);
+  const ipMax = userId ? RATE_LIMIT_MAX : GUEST_RATE_LIMIT_MAX;
+  const keys: Array<{ key: string; max: number }> = [
+    { key: `ip:${getClientIp(request)}`, max: ipMax },
+  ];
+  if (userId) keys.push({ key: `user:${userId}`, max: RATE_LIMIT_MAX });
 
-  for (const key of keys) {
-    const result = checkRateLimit(key);
+  for (const { key, max } of keys) {
+    const result = checkRateLimit(key, max);
     if (!result.allowed) return result;
   }
   return { allowed: true };
 }
 
-function rateLimitExceeded(retryAfterSec: number) {
+function rateLimitExceeded(retryAfterSec: number, guest = false) {
+  const limit = guest ? GUEST_RATE_LIMIT_MAX : RATE_LIMIT_MAX;
   return NextResponse.json(
     {
-      error: "Too many requests. Limit is 30 weather requests per minute.",
+      error: `Too many requests. Limit is ${limit} weather requests per minute.`,
       retryAfterSec,
     },
     {
@@ -104,7 +111,7 @@ export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser(request);
   const limit = enforceRateLimits(request, user?.id ?? null);
   if (!limit.allowed) {
-    return rateLimitExceeded(limit.retryAfterSec);
+    return rateLimitExceeded(limit.retryAfterSec, !user);
   }
 
   const { searchParams } = request.nextUrl;

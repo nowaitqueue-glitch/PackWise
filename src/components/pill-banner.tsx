@@ -9,10 +9,12 @@ export type PillBannerState = {
   id: number;
   message: string;
   variant: PillBannerVariant;
+  actionLabel?: string;
 };
 
 type PillBannerProps = {
   banner: PillBannerState | null;
+  onAction?: () => void;
 };
 
 const variantStyles: Record<PillBannerVariant, string> = {
@@ -22,7 +24,7 @@ const variantStyles: Record<PillBannerVariant, string> = {
   info: "border-sky-500/25 bg-sky-500/10 text-foreground",
 };
 
-export function PillBanner({ banner }: PillBannerProps) {
+export function PillBanner({ banner, onAction }: PillBannerProps) {
   return (
     <div
       aria-live="polite"
@@ -38,11 +40,21 @@ export function PillBanner({ banner }: PillBannerProps) {
             exit={{ y: -100, opacity: 0 }}
             transition={{ duration: 0.28, ease: "easeOut" }}
             className={cn(
-              "pointer-events-auto max-w-lg rounded-full border px-6 py-2.5 text-center text-sm font-medium shadow-lg backdrop-blur-md",
+              "pointer-events-auto flex max-w-lg items-center gap-3 rounded-full border px-5 py-2.5 text-sm font-medium shadow-lg backdrop-blur-md",
               variantStyles[banner.variant]
             )}
           >
-            {banner.message}
+            <span className="min-w-0 flex-1 text-center">{banner.message}</span>
+            {banner.actionLabel && onAction ? (
+              <button
+                type="button"
+                className="shrink-0 rounded-full px-2.5 py-1 text-sm font-semibold underline-offset-2 transition-opacity hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={onAction}
+                data-testid="pill-banner-action"
+              >
+                {banner.actionLabel}
+              </button>
+            ) : null}
           </motion.div>
         ) : null}
       </AnimatePresence>

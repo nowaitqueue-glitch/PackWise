@@ -46,15 +46,25 @@ setup("authenticate", async ({ page, baseURL }) => {
   const origin = baseURL ?? "http://127.0.0.1:3333";
 
   if (hasJwt() && supabaseUrl && anonKey && !isPlaceholderSecret(supabaseUrl) && !isPlaceholderSecret(anonKey)) {
-    await injectSupabaseAuthCookies(page, {
-      accessToken: jwt!,
-      refreshToken: refresh,
-      supabaseUrl,
-      anonKey,
-      baseURL: origin,
-    });
-    await page.goto(`${origin}/dashboard`);
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    try {
+      await injectSupabaseAuthCookies(page, {
+        accessToken: jwt!,
+        refreshToken: refresh,
+        supabaseUrl,
+        anonKey,
+        baseURL: origin,
+      });
+      await page.goto(`${origin}/dashboard`);
+      await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!hasTestLoginFallback() || !/expired|invalid JWT|invalid claims/i.test(message)) {
+        throw error;
+      }
+      // Expired TEST_USER_JWT — mint a fresh session via the test login route.
+      await page.goto(`${origin}/api/test/login`);
+      await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    }
   } else {
     // Fallback: service-role session mint via test route (Set-Cookie on this origin).
     await page.goto(`${origin}/api/test/login`);

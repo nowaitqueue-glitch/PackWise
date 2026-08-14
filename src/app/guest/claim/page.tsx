@@ -11,6 +11,7 @@ import {
   applyPackedState,
   clearClaimPackingSnapshot,
   clearGuestTrip,
+  ensureGuestClaimId,
   readGuestCustomItems,
   readGuestPackingItems,
   readGuestTrip,
@@ -119,21 +120,29 @@ export default function GuestClaimPage() {
         packingItems,
         customItems,
         packingSource: "template",
+        claimId: ensureGuestClaimId() ?? undefined,
       });
 
       if (cancelled) return;
 
       if (!result.ok) {
+        // Keep guest localStorage intact so the user can retry.
         restoreClaimPackingSnapshot();
         setError(result.error);
         setStatus("error");
         return;
       }
 
+      // Clear guest data only after the full transfer succeeded (warnings OK).
       clearClaimPackingSnapshot();
       clearGuestTrip();
       setStatus("done");
-      router.replace(`/dashboard/trips/${result.tripId}?created=1`);
+      const warningQuery = result.warning
+        ? `&claim_warning=1`
+        : "";
+      router.replace(
+        `/dashboard/trips/${result.tripId}?created=1${warningQuery}`
+      );
     })();
 
     return () => {

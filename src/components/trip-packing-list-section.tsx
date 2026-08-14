@@ -5,8 +5,9 @@ import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 import { regeneratePackingList } from "@/app/dashboard/packing-actions";
 import { TripPackingListSkeleton } from "@/components/trip-packing-list-skeleton";
+import { Button } from "@/components/ui/button";
 import { type PackingItem } from "@/lib/packing";
-import { cn, glassChip } from "@/lib/utils";
+import { cn, glassCard, glassChip, solidContentCard } from "@/lib/utils";
 
 const TripPackingList = dynamic(
   () =>
@@ -66,11 +67,14 @@ export function TripPackingListSection({
   const [loadState, setLoadState] = useState<LoadState>(() =>
     shouldAutoGenerate ? "pending" : "ready"
   );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isManualRetry, setIsManualRetry] = useState(false);
 
   useEffect(() => {
     setItems(initialItems);
     if (initialItems.length > 0) {
       setLoadState("ready");
+      setErrorMessage(null);
       return;
     }
     if (shouldAutoGenerate) {
@@ -94,7 +98,12 @@ export function TripPackingListSection({
           tripId,
           error: result.error,
         });
+        setErrorMessage(
+          result.error ||
+            "Packing list generation failed. You can try again when ready."
+        );
         setLoadState("failed");
+        setIsManualRetry(false);
         return;
       }
 
@@ -104,9 +113,18 @@ export function TripPackingListSection({
         source: result.source,
       });
       setItems(result.items);
+      setErrorMessage(null);
       setLoadState("ready");
+      setIsManualRetry(false);
     });
   }, [loadState, tripId, canRegenerate]);
+
+  function handleRegenerate() {
+    if (!canRegenerate || isManualRetry) return;
+    setIsManualRetry(true);
+    setErrorMessage(null);
+    setLoadState("pending");
+  }
 
   if (loadState === "pending") {
     return (
@@ -123,6 +141,31 @@ export function TripPackingListSection({
           Generating your packing list...
         </p>
         <TripPackingListSkeleton />
+      </div>
+    );
+  }
+
+  if (loadState === "failed" && items.length === 0) {
+    return (
+      <div
+        className={cn("sticky top-20 z-20 space-y-3 p-5", solidContentCard, glassCard)}
+        role="alert"
+        data-testid="packing-list-generate-error"
+      >
+        <p className="text-sm font-medium text-destructive">
+          {errorMessage ??
+            "Packing list generation failed. You can try again when ready."}
+        </p>
+        {canRegenerate ? (
+          <Button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={isManualRetry}
+            data-testid="packing-list-generate-retry"
+          >
+            Regenerate
+          </Button>
+        ) : null}
       </div>
     );
   }
