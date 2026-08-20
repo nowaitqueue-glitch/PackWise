@@ -131,8 +131,9 @@ export function TripPackingListSection({
       <div className="flex flex-col gap-3">
         <p
           className={cn(
-            "flex w-fit items-center gap-2 px-3 py-1.5 text-sm font-semibold text-foreground",
-            glassChip
+            "flex w-fit items-center gap-2 px-3 py-1.5 text-sm font-semibold text-foreground dark:text-slate-100",
+            glassChip,
+            "bg-white/90 dark:bg-slate-950/90"
           )}
           aria-live="polite"
           data-testid="packing-list-generating"

@@ -18,7 +18,7 @@ export const glassContentOverlay =
 
 /** Opaque panels over scenic trip backgrounds (packing, weather, etc.). */
 export const solidContentCard =
-  "rounded-2xl border border-border bg-white/80 shadow-lg dark:bg-gray-900/80"
+  "rounded-2xl border border-border bg-white/95 shadow-lg dark:border-white/10 dark:bg-gray-950/95"
 
 /** Sticky headers / toolbars that float above scrolling content. */
 export const glassHeader =
@@ -33,7 +33,7 @@ export const iconTileClass =
 
 /** Smaller frosted chips (weather badges, meta pills). */
 export const glassChip =
-  "rounded-full border border-white/40 bg-white/60 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/60"
+  "rounded-full border border-white/40 bg-white/70 backdrop-blur-sm dark:border-white/15 dark:bg-slate-950/80"
 
 /** The primary travel gradient, for surfaces and for text. */
 export const travelGradient = "bg-travel-gradient"

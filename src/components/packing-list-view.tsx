@@ -563,11 +563,13 @@ export function PackingListView({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className={sectionTitleClass}>Packing list</h2>
+              <h2 className={cn(sectionTitleClass, "dark:text-slate-100")}>
+                Packing list
+              </h2>
               {titleBadge}
             </div>
             {description ? (
-              <div className="space-y-1.5 text-sm text-muted-foreground">
+              <div className="space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
                 {description}
               </div>
             ) : null}
@@ -578,12 +580,12 @@ export function PackingListView({
         {hasItems ? (
           <div className="flex flex-col gap-2" data-testid="packing-progress">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span className="text-sm font-semibold text-foreground">
+              <span className="text-sm font-semibold text-foreground dark:text-slate-100">
                 Packing progress
               </span>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span
-                  className="text-sm font-semibold tabular-nums text-foreground"
+                  className="text-sm font-semibold tabular-nums text-foreground dark:text-slate-100"
                   data-testid="packing-progress-text"
                 >
                   {progress.packed}/{progress.total} packed ({progress.percent}
@@ -594,7 +596,7 @@ export function PackingListView({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-auto px-2 py-0.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    className="h-auto px-2 py-0.5 text-sm font-medium text-slate-600 hover:text-foreground dark:text-slate-300 dark:hover:text-slate-100"
                     onClick={() => {
                       if (isSelectionMode) {
                         exitSelectionMode();
@@ -629,7 +631,8 @@ export function PackingListView({
           <div
             className={cn(
               "flex items-center gap-2 px-3 py-2",
-              glassChip
+              glassChip,
+              "bg-white/90 dark:bg-slate-950/90"
             )}
             role="status"
             data-testid="pwa-install-hint"
@@ -645,7 +648,7 @@ export function PackingListView({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-8 shrink-0 rounded-full text-muted-foreground"
+              className="size-8 shrink-0 rounded-full text-slate-500 dark:text-slate-400"
               aria-label="Dismiss install hint"
               onClick={dismissInstallHint}
             >
@@ -655,7 +658,7 @@ export function PackingListView({
         ) : null}
 
         {!hasItems && emptyMessage ? (
-          <div className="text-sm text-muted-foreground">{emptyMessage}</div>
+          <div className="text-sm text-slate-600 dark:text-slate-300">{emptyMessage}</div>
         ) : null}
       </PackingPanel>
 
@@ -668,11 +671,14 @@ export function PackingListView({
             className="transition-shadow duration-300 hover:shadow-xl"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className={sectionTitleClass}>{group.category}</h3>
+              <h3 className={cn(sectionTitleClass, "dark:text-slate-100")}>
+                {group.category}
+              </h3>
               <span
                 className={cn(
-                  "px-2.5 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground",
-                  glassChip
+                  "px-2.5 py-0.5 text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300",
+                  glassChip,
+                  "bg-white/90 dark:bg-slate-950/90"
                 )}
               >
                 {packedInGroup}/{group.items.length} packed
@@ -705,10 +711,11 @@ export function PackingListView({
                       isSelectionMode &&
                         "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200",
                       isSelected &&
-                        "bg-blue-500/10 ring-1 ring-inset ring-blue-500/25 dark:bg-blue-400/10 dark:ring-blue-400/30",
+                        "bg-sky-500/10 ring-1 ring-inset ring-sky-500/30 dark:bg-sky-500/20 dark:ring-sky-400/45",
                       isEditing
                         ? "p-2"
-                        : !isSelected && "hover:bg-white/50 dark:hover:bg-white/5"
+                        : !isSelected &&
+                            "hover:bg-slate-900/[0.04] dark:hover:bg-white/10"
                     )}
                     data-testid={
                       item.isCustom ? "packing-custom-item" : "packing-item"
@@ -749,8 +756,8 @@ export function PackingListView({
                             "grid size-5 shrink-0 place-content-center rounded-full border-2 transition-all",
                             "motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-200",
                             isSelected
-                              ? "border-transparent bg-blue-500 text-white dark:bg-blue-400"
-                              : "border-blue-500/45 bg-white/80 dark:border-blue-400/45 dark:bg-slate-900/70"
+                              ? "border-transparent bg-sky-500 text-white dark:bg-sky-400"
+                              : "border-sky-500/50 bg-white/90 dark:border-sky-400/55 dark:bg-slate-950/90"
                           )}
                           aria-hidden
                         >
@@ -763,8 +770,8 @@ export function PackingListView({
                             className={cn(
                               "block text-sm font-medium transition-colors",
                               item.packed
-                                ? "text-muted-foreground/70 line-through"
-                                : "text-foreground"
+                                ? "text-slate-500 line-through dark:text-slate-400"
+                                : "text-foreground dark:text-slate-100"
                             )}
                           >
                             {item.name}
@@ -772,8 +779,8 @@ export function PackingListView({
                           {item.notes ? (
                             <span
                               className={cn(
-                                "block text-xs text-muted-foreground",
-                                item.packed && "line-through opacity-70"
+                                "block text-xs text-slate-600 dark:text-slate-400",
+                                item.packed && "line-through"
                               )}
                             >
                               {item.notes}
@@ -813,8 +820,8 @@ export function PackingListView({
                             className={cn(
                               "block text-sm font-medium transition-colors",
                               item.packed
-                                ? "text-muted-foreground/70 line-through"
-                                : "text-foreground"
+                                ? "text-slate-500 line-through dark:text-slate-400"
+                                : "text-foreground dark:text-slate-100"
                             )}
                           >
                             {item.name}
@@ -822,8 +829,8 @@ export function PackingListView({
                           {item.notes ? (
                             <span
                               className={cn(
-                                "block text-xs text-muted-foreground",
-                                item.packed && "line-through opacity-70"
+                                "block text-xs text-slate-600 dark:text-slate-400",
+                                item.packed && "line-through"
                               )}
                             >
                               {item.notes}
@@ -850,7 +857,7 @@ export function PackingListView({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="min-h-11 min-w-11 shrink-0 p-2 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                            className="min-h-11 min-w-11 shrink-0 p-2 text-slate-500 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 dark:text-slate-400"
                             onClick={() => onStartEdit?.(item)}
                             disabled={busy || isExiting}
                             aria-label={`Edit ${item.name}`}
@@ -863,9 +870,9 @@ export function PackingListView({
                         {canRemove ? (
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="destructiveGhost"
                             size="icon"
-                            className="min-h-11 min-w-11 shrink-0 p-2 text-gray-400 opacity-100 transition-colors hover:text-red-500 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                            className="min-h-11 min-w-11 shrink-0 p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 dark:text-slate-400"
                             onClick={() =>
                               handleRemoveClick(item, itemIndex, key)
                             }
@@ -924,6 +931,7 @@ export function PackingListView({
             className={cn(
               "fixed inset-x-4 bottom-20 z-40 mx-auto flex max-w-lg items-center gap-2 p-3 sm:bottom-6 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full",
               glassCard,
+              "bg-white/90 dark:bg-slate-950/95 dark:border-white/15",
               "shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
             )}
             data-testid="packing-batch-bar"
